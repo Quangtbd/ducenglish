@@ -1,0 +1,6 @@
+{
+  "name": "Duc English",
+  "description": "Nền tảng luyện thi TOEIC toàn diện 7 phân mục với trọng tâm Studio Nghe chép chính tả Part 1-4, giọng đọc AI chuẩn TOEIC và lưu tiến độ thông minh.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
