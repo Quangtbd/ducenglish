@@ -34,6 +34,18 @@ export const TOPIC_LABELS: Record<TopicId, string> = {
   marketing: "Kinh doanh & Tiếp thị",
 };
 
+export const CEFR_LEVEL_META: Record<
+  "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
+  { label: string; scoreBand: string; desc: string }
+> = {
+  A1: { label: "A1 · Nhập môn", scoreBand: "<300", desc: "Câu ngắn, từ vựng văn phòng cơ bản" },
+  A2: { label: "A2 · Sơ cấp", scoreBand: "300–450", desc: "Tình huống giao tiếp & thông báo quen thuộc" },
+  B1: { label: "B1 · Trung cấp", scoreBand: "450–650", desc: "Hội thoại công sở & dịch vụ nhiều lượt" },
+  B2: { label: "B2 · Trên trung cấp", scoreBand: "650–780", desc: "Thảo luận quy trình, báo cáo & phản hồi" },
+  C1: { label: "C1 · Nâng cao", scoreBand: "780–880", desc: "Đàm phán chuyên sâu, kiểm toán & hàng không" },
+  C2: { label: "C2 · Thành thạo", scoreBand: "880–990", desc: "Tốc độ bản ngữ, thuật ngữ tài chính & điều hành" },
+};
+
 export const COLLECTION_TABS = [
   { id: "all", label: "Tất cả bộ đề" },
   { id: "crack-vol-1", label: "Crack Vol 1" },
@@ -46,5 +58,6 @@ export const COLLECTION_TABS = [
   { id: "2021", label: "2021" },
   { id: "2020", label: "2020" },
   { id: "2019", label: "2019" },
+  { id: "thematic", label: "Theo chủ đề" },
   { id: "custom", label: "Bài nghe tự thêm" },
 ] as const;

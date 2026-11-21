@@ -3,7 +3,7 @@ import {
   Microphone,
   Stop,
   SpeakerHigh,
-  Sparkle,
+  Waveform,
   Play,
   Timer,
   ArrowCounterClockwise,
@@ -342,7 +342,7 @@ export function SpeakingModule() {
             disabled={evaluating}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            <Sparkle size={16} weight="duotone" />
+            <Waveform size={17} weight="duotone" />
             <span>
               {evaluating ? "Đang phân tích bài nói..." : "Chấm điểm & Góp ý Speaking"}
             </span>

@@ -17,6 +17,8 @@
 
   body {
     background-color: #f8fafc;
+    font-size: 16px;
+    line-height: 1.5;
   }
 
   .dark body {
@@ -39,4 +41,25 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Tactile mouse hover shine sweep (GPU transform only) */
+.hover-shine-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 55%;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(36, 99, 235, 0.06) 50%,
+    transparent 80%
+  );
+  transform: translateX(-140%) skewX(-18deg);
+  transition: transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.hover-shine-card:hover::after {
+  transform: translateX(240%) skewX(-18deg);
 }

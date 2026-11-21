@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   PencilSimpleLine,
-  Sparkle,
   Eye,
   Timer,
   CheckCircle,
@@ -231,9 +230,9 @@ export function WritingModule() {
             disabled={evaluating}
             className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            <Sparkle size={16} weight="duotone" />
+            <CheckCircle size={17} weight="duotone" />
             <span>
-              {evaluating ? "AI đang chấm bài..." : "Chấm điểm & Sửa lỗi chi tiết"}
+              {evaluating ? "Đang chấm bài..." : "Chấm điểm & Sửa lỗi chi tiết"}
             </span>
           </button>
 

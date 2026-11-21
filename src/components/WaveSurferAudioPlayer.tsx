@@ -279,8 +279,8 @@ export function WaveSurferAudioPlayer({
                   {audioSource === "custom-upload"
                     ? "File MP3 của bạn"
                     : audioSource === "cache"
-                    ? "Âm thanh AI đã lưu cache"
-                    : "Giọng đọc AI Gemini 3.8 TTS"}
+                    ? "Âm thanh đã lưu cache"
+                    : "Giọng đọc TOEIC chuẩn (HD)"}
                 </span>
               </span>
               <span className="font-mono tabular-nums">

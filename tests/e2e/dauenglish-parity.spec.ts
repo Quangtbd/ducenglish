@@ -133,20 +133,80 @@ test.describe("UI Parity Comparison: Duc English vs DauEnglish.com", () => {
     expect(localAudit.allSingleLine).toBe(true);
     expect(localAudit.horizontalOverflow).toBe(false);
 
-    // 2. Typography & Color Tokens Parity
+    // 2. Typography & Color Tokens Parity (16px body, 14px+ CTA, 18px+ question count, zero Gemini text)
     expect(localAudit.bodyFont).toContain(referenceBaseline.fontIncludes);
     expect(localAudit.bodyBg).toBe(referenceBaseline.bodyBg);
+
+    const scaleAndBrandAudit = await page.evaluate(() => {
+      const bodySize = parseFloat(getComputedStyle(document.body).fontSize);
+      const cta = document.querySelector(
+        '[data-testid="start-crack-vol1-test1-part1"]'
+      );
+      const ctaFontSize = cta ? parseFloat(getComputedStyle(cta).fontSize) : 0;
+      const countEl = document.querySelector(
+        '[data-testid="part-card-crack-vol1-test1-part1"] .text-lg.font-bold'
+      );
+      const countFontSize = countEl
+        ? parseFloat(getComputedStyle(countEl).fontSize)
+        : 0;
+      const visibleText = document.body.innerText || "";
+      return {
+        bodySize,
+        ctaFontSize,
+        countFontSize,
+        hasGeminiWord: /gemini/i.test(visibleText),
+      };
+    });
+
+    expect(scaleAndBrandAudit.bodySize).toBeGreaterThanOrEqual(16);
+    expect(scaleAndBrandAudit.ctaFontSize).toBeGreaterThanOrEqual(14);
+    expect(scaleAndBrandAudit.countFontSize).toBeGreaterThanOrEqual(18);
+    expect(scaleAndBrandAudit.hasGeminiWord).toBe(false);
 
     // 3. Hero Banner Parity
     expect(localAudit.h1FontSize).toBeGreaterThanOrEqual(30);
     expect(localAudit.heroBadgeRect?.width).toBeGreaterThanOrEqual(80);
     expect(localAudit.heroBadgeRect?.height).toBeGreaterThanOrEqual(80);
 
-    // 4. Test Cards 4-Column Horizontal Grid Parity
+    // 4. Test Cards 4-Column Horizontal Grid Parity & Radix HoverCard Preview
     expect(localAudit.gridCols).toBe(referenceBaseline.gridCols);
     expect(localAudit.minCardHeight).toBeGreaterThanOrEqual(
       referenceBaseline.minCardHeight
     );
+
+    await page
+      .getByTestId("part-card-crack-vol1-test1-part1")
+      .hover();
+    await expect(
+      page.getByText("Từ vựng trọng tâm trong bài:")
+    ).toBeVisible({ timeout: 3000 });
+  });
+
+  test("verifies Theo chủ đề (A1 -> C2) CEFR progression, 4-col grouping, and launching DictationStudio", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    await page.getByTestId("collection-thematic").click();
+    await expect(page.getByTestId("thematic-card-grid")).toBeVisible();
+
+    // Filter A1 (<300)
+    await page.getByTestId("cefr-filter-A1").click();
+    await expect(page.getByText("A1 · Part 1").first()).toBeVisible();
+    await expect(
+      page.getByTestId("thematic-card-theme-a1-office-arrival")
+    ).toBeVisible();
+
+    // Filter C2 (900+)
+    await page.getByTestId("cefr-filter-C2").click();
+    await expect(page.getByText("C2 · Part 3").first()).toBeVisible();
+
+    // Back to A1 and launch Morning Office Arrival into DictationStudio
+    await page.getByTestId("cefr-filter-A1").click();
+    await page.getByTestId("thematic-card-theme-a1-office-arrival").click();
+    await expect(page.getByTestId("dictation-input")).toBeVisible();
+    await page.getByTestId("exit-studio-button").click();
   });
 
   test("verifies interactive Game, Café, Cộng đồng, About us, and Theme toggle from the upgraded navbar", async ({

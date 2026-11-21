@@ -9,6 +9,8 @@ export type MainSection =
   | "game"
   | "cafe";
 
+export type CefrLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+
 export type TestCollectionId =
   | "all"
   | "crack-vol-1"
@@ -21,6 +23,7 @@ export type TestCollectionId =
   | "2021"
   | "2020"
   | "2019"
+  | "thematic"
   | "custom";
 
 export type ToeicPart = 1 | 2 | 3 | 4;
@@ -83,6 +86,17 @@ export interface TestSet {
   topic: Exclude<TopicId, "all">;
   totalQuestions: number;
   partCounts: Record<ToeicPart, number>;
+}
+
+export interface ThematicListeningSet {
+  id: string;
+  title: string;
+  titleVi: string;
+  cefrLevel: CefrLevel;
+  part: ToeicPart;
+  topic: Exclude<TopicId, "all">;
+  descriptionVi: string;
+  questions: ListeningQuestion[];
 }
 
 export interface DiffToken {

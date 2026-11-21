@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MotionConfig } from "motion/react";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import {
@@ -7,6 +8,7 @@ import {
   TOEIC_LISTENING_QUESTIONS,
   TOEIC_TEST_SETS,
 } from "./data/toeicDataset";
+import { THEMATIC_LISTENING_SETS } from "./data/thematicListeningSets";
 import {
   db,
   getUserProfile,
@@ -95,7 +97,11 @@ function DucEnglishShell() {
     queryFn: () => db.customQuestions.toArray(),
   });
 
-  const allListeningQuestions = [...TOEIC_LISTENING_QUESTIONS, ...customQuestions];
+  const allListeningQuestions = [
+    ...TOEIC_LISTENING_QUESTIONS,
+    ...THEMATIC_LISTENING_SETS.flatMap((s) => s.questions),
+    ...customQuestions,
+  ];
 
   const refreshLocalStores = () => {
     qc.invalidateQueries({ queryKey: ["duc-attempts"] });
@@ -273,9 +279,11 @@ function DucEnglishShell() {
 export default function App() {
   return (
     <MotionConfig reducedMotion="user">
-      <QueryClientProvider client={queryClient}>
-        <DucEnglishShell />
-      </QueryClientProvider>
+      <Tooltip.Provider delayDuration={180}>
+        <QueryClientProvider client={queryClient}>
+          <DucEnglishShell />
+        </QueryClientProvider>
+      </Tooltip.Provider>
     </MotionConfig>
   );
 }

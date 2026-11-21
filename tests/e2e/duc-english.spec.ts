@@ -65,9 +65,11 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
     expect(gridAudit.cardCount).toBe(4);
     expect(gridAudit.minCardHeight).toBeGreaterThanOrEqual(170);
 
-    // 4. Expand Mẹo guide & filter Crack Vol 1 / Level / Part / Matrix toggle
+    // 4. Open Vaul Mẹo drawer, verify content & close, then filter Crack Vol 1 / Level / Part / Matrix toggle
     await page.getByTestId("tips-trigger").click();
     await expect(page.getByText("1. Nghe nắm ý:")).toBeVisible();
+    await page.getByRole("button", { name: "Đóng hướng dẫn" }).click();
+    await expect(page.getByText("1. Nghe nắm ý:")).not.toBeVisible();
 
     await page.getByTestId("collection-crack-vol-1").click();
     await expect(page.getByText("Test 1 · Crack Vol 1")).toBeVisible();

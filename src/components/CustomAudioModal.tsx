@@ -1,6 +1,6 @@
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { UploadSimple, Sparkle, X, FileAudio } from "@phosphor-icons/react";
+import { UploadSimple, Waveform, X, FileAudio } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import type { ListeningQuestion, ToeicPart } from "../types/toeic";
 import { db } from "../lib/db";
@@ -126,8 +126,8 @@ export function CustomAudioModal({
               <Dialog.Title className="font-display text-lg font-bold text-slate-900 dark:text-slate-50">
                 Thêm file MP3 &amp; Script luyện nghe riêng
               </Dialog.Title>
-              <Dialog.Description className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Tải lên file audio cá nhân (hoặc để trống để hệ thống tự đọc bằng AI Gemini TTS).
+              <Dialog.Description className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                Tải lên file audio cá nhân (hoặc để trống để hệ thống tự phát bằng giọng đọc TOEIC chuẩn).
               </Dialog.Description>
             </div>
             <Dialog.Close className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -187,8 +187,8 @@ export function CustomAudioModal({
                     disabled={isTranscribing}
                     className="inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:bg-blue-950 dark:text-blue-300"
                   >
-                    <Sparkle size={14} weight="duotone" />
-                    {isTranscribing ? "Đang gỡ băng..." : "AI gỡ băng"}
+                    <Waveform size={15} weight="duotone" />
+                    {isTranscribing ? "Đang gỡ băng..." : "Tự động gỡ băng"}
                   </button>
                 )}
               </div>
