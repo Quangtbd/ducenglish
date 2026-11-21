@@ -3,11 +3,7 @@ import { MotionConfig } from "motion/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "sonner";
-import {
-  INITIAL_VOCAB_DECK,
-  TOEIC_LISTENING_QUESTIONS,
-  TOEIC_TEST_SETS,
-} from "./data/toeicDataset";
+import { INITIAL_VOCAB_DECK } from "./data/toeicDataset";
 import { THEMATIC_LISTENING_SETS } from "./data/thematicListeningSets";
 import {
   db,
@@ -15,10 +11,11 @@ import {
   saveUserProfile,
 } from "./lib/db";
 import type {
+  CefrLevel,
   DictationMode,
   ListeningQuestion,
   MainSection,
-  ToeicPart,
+  ThematicListeningSet,
   UserProfile,
 } from "./types/toeic";
 import { TopNav } from "./components/TopNav";
@@ -47,12 +44,12 @@ function DucEnglishShell() {
   const [listenViewMode, setListenViewMode] = useState<"matrix" | "review">("matrix");
   const [activeStudioSession, setActiveStudioSession] = useState<{
     title: string;
+    cefrLevel?: CefrLevel;
     questions: ListeningQuestion[];
     initialIndex: number;
     defaultMode?: DictationMode;
   } | null>(null);
 
-  // Apply light/dark class on <html>
   useEffect(() => {
     const root = document.documentElement;
     if (profile.theme === "dark") {
@@ -62,7 +59,6 @@ function DucEnglishShell() {
     }
   }, [profile.theme]);
 
-  // Seed initial vocab deck once into Dexie
   useEffect(() => {
     db.vocab.count().then((count) => {
       if (count === 0) {
@@ -92,22 +88,14 @@ function DucEnglishShell() {
     queryFn: () => db.vocab.toArray(),
   });
 
-  const { data: customQuestions = [] } = useQuery({
-    queryKey: ["duc-custom-questions"],
-    queryFn: () => db.customQuestions.toArray(),
-  });
-
-  const allListeningQuestions = [
-    ...TOEIC_LISTENING_QUESTIONS,
-    ...THEMATIC_LISTENING_SETS.flatMap((s) => s.questions),
-    ...customQuestions,
-  ];
+  const allListeningQuestions = THEMATIC_LISTENING_SETS.flatMap(
+    (s) => s.questions
+  );
 
   const refreshLocalStores = () => {
     qc.invalidateQueries({ queryKey: ["duc-attempts"] });
     qc.invalidateQueries({ queryKey: ["duc-review"] });
     qc.invalidateQueries({ queryKey: ["duc-vocab"] });
-    qc.invalidateQueries({ queryKey: ["duc-custom-questions"] });
   };
 
   const handleUpdateProfile = (values: Partial<UserProfile>) => {
@@ -115,19 +103,14 @@ function DucEnglishShell() {
     setProfile(next);
   };
 
-  const handleJumpToTest = (testId: string, part: ToeicPart = 1) => {
-    const test = TOEIC_TEST_SETS.find((t) => t.id === testId);
-    const list = allListeningQuestions
-      .filter((q) => q.testId === testId && q.part === part)
-      .sort((a, b) => a.order - b.order);
-    const fallback = allListeningQuestions
-      .filter((q) => q.testId === testId)
-      .sort((a, b) => a.order - b.order);
+  const handleJumpToThematicSet = (set: ThematicListeningSet) => {
     setActiveSection("listen");
     setActiveStudioSession({
-      title: `${test?.title ?? "Bài luyện"} · Part ${part}`,
-      questions: list.length > 0 ? list : fallback,
+      title: `${set.cefrLevel} · ${set.title}`,
+      cefrLevel: set.cefrLevel,
+      questions: set.questions,
       initialIndex: 0,
+      defaultMode: "check",
     });
   };
 
@@ -160,14 +143,20 @@ function DucEnglishShell() {
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         {activeSection === "listen" && (
           <ListeningHub
-            tests={TOEIC_TEST_SETS}
             questions={allListeningQuestions}
             attempts={attempts}
             reviewQueue={reviewQueue}
+            vocabList={vocabList}
             profile={profile}
             activeStudioSession={activeStudioSession}
-            onStartStudio={(title, questions, initialIndex = 0, defaultMode) =>
-              setActiveStudioSession({ title, questions, initialIndex, defaultMode })
+            onStartStudio={(title, questions, initialIndex = 0, defaultMode, cefrLevel) =>
+              setActiveStudioSession({
+                title,
+                questions,
+                initialIndex,
+                defaultMode,
+                cefrLevel,
+              })
             }
             onExitStudio={() => setActiveStudioSession(null)}
             onUpdateProfile={handleUpdateProfile}
@@ -204,7 +193,7 @@ function DucEnglishShell() {
       <footer className="border-t border-slate-200 bg-white py-5 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <span className="font-display font-semibold text-slate-700 dark:text-slate-300">
-            Duc English · Hệ thống luyện thi TOEIC 4 kỹ năng
+            Duc English · Hệ thống luyện thi TOEIC A1 → C2
           </span>
           <div className="flex items-center gap-4">
             <button
@@ -212,7 +201,7 @@ function DucEnglishShell() {
               onClick={() => setActiveSection("listen")}
               className="hover:text-slate-900 dark:hover:text-slate-100"
             >
-              Nghe chép chính tả
+              Nghe check &amp; Chép chính tả
             </button>
             <button
               type="button"
@@ -242,8 +231,8 @@ function DucEnglishShell() {
       <CommandSearchModal
         open={commandOpen}
         onOpenChange={setCommandOpen}
-        tests={TOEIC_TEST_SETS}
-        onJumpToTest={handleJumpToTest}
+        thematicSets={THEMATIC_LISTENING_SETS}
+        onJumpToSet={handleJumpToThematicSet}
         onSelectSection={(sec) => {
           setActiveSection(sec);
           setActiveStudioSession(null);

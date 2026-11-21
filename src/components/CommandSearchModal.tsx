@@ -11,13 +11,13 @@ import {
   Fire,
   MagnifyingGlass,
 } from "@phosphor-icons/react";
-import type { MainSection, TestSet, ToeicPart } from "../types/toeic";
+import type { MainSection, ThematicListeningSet } from "../types/toeic";
 
 interface CommandSearchModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  tests: TestSet[];
-  onJumpToTest: (testId: string, part?: ToeicPart) => void;
+  thematicSets: ThematicListeningSet[];
+  onJumpToSet: (set: ThematicListeningSet) => void;
   onSelectSection: (section: MainSection) => void;
   onOpenReviewQueue: () => void;
 }
@@ -25,8 +25,8 @@ interface CommandSearchModalProps {
 export function CommandSearchModal({
   open,
   onOpenChange,
-  tests,
-  onJumpToTest,
+  thematicSets,
+  onJumpToSet,
   onSelectSection,
   onOpenReviewQueue,
 }: CommandSearchModalProps) {
@@ -52,12 +52,12 @@ export function CommandSearchModal({
         className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <Command label="Tìm nhanh bộ đề và phân mục">
+        <Command label="Tìm nhanh bộ đề A1–C2 và phân mục">
           <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
             <MagnifyingGlass size={18} className="text-slate-400" />
             <Command.Input
               autoFocus
-              placeholder="Tìm nhanh: Test 2, Part 3, 2026, Câu cần luyện lại..."
+              placeholder="Tìm nhanh: A1, B2, C1, Part 3, Office, Câu cần luyện lại..."
               className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100"
             />
             <button
@@ -92,39 +92,41 @@ export function CommandSearchModal({
             </Command.Group>
 
             <Command.Group
-              heading="Bộ đề Nghe chép (Test 1 – Test 10)"
+              heading="Bộ đề Nghe A1 → C2 theo chủ đề"
               className="px-2 py-1.5 text-xs font-semibold text-slate-500"
             >
-              {tests.map((test) => (
+              {thematicSets.map((set) => (
                 <Command.Item
-                  key={test.id}
-                  value={`${test.title} ${test.collectionLabel} ${test.levelRange}`}
+                  key={set.id}
+                  value={`${set.cefrLevel} ${set.title} ${set.titleVi} Part ${set.part}`}
                   onSelect={() => {
-                    onJumpToTest(test.id, 1);
+                    onJumpToSet(set);
                     onOpenChange(false);
                   }}
                   className="flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-slate-800 aria-selected:bg-blue-50 aria-selected:text-blue-700 dark:text-slate-200 dark:aria-selected:bg-blue-950/60 dark:aria-selected:text-blue-300"
                 >
                   <span className="flex items-center gap-2.5">
                     <Headphones size={16} weight="duotone" className="text-blue-600" />
-                    <span className="font-medium">{test.title}</span>
+                    <span className="font-medium">
+                      {set.cefrLevel} · {set.title}
+                    </span>
                   </span>
                   <span className="font-mono text-xs text-slate-400 tabular-nums">
-                    {test.levelRange}
+                    Part {set.part}
                   </span>
                 </Command.Item>
               ))}
             </Command.Group>
 
             <Command.Group
-              heading="7 Phân mục kỹ năng"
+              heading="Phân mục kỹ năng"
               className="px-2 py-1.5 text-xs font-semibold text-slate-500"
             >
               {[
-                { id: "listen" as const, label: "Nghe · Nghe chép chính tả", icon: Headphones },
+                { id: "listen" as const, label: "Nghe · Lộ trình A1–C2", icon: Headphones },
                 { id: "read" as const, label: "Đọc · Reading Part 5–7", icon: BookOpenText },
                 { id: "speak" as const, label: "Nói · Shadowing & Speaking", icon: Microphone },
-                { id: "write" as const, label: "Viết · AI chấm Writing", icon: PencilSimpleLine },
+                { id: "write" as const, label: "Viết · Chấm bài Writing", icon: PencilSimpleLine },
                 { id: "vocab" as const, label: "Từ vựng · Flashcard TOEIC", icon: Cards },
                 { id: "test" as const, label: "Test · Đề thi thử", icon: Exam },
                 { id: "course" as const, label: "Course · Lộ trình 5 bước", icon: GraduationCap },

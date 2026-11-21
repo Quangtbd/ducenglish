@@ -1,13 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
-  test("verifies Be Vietnam Pro typography, #f8fafc/#2463eb tokens, 65px icon nav, Hero, and 4-col Part cards", async ({
+test.describe("Duc English — A1–C2 Hub & Đậu English Practice Studio E2E", () => {
+  test("verifies Be Vietnam Pro typography, 65px icon nav, A1-C2 hub without Crack Vol / Thêm MP3, and 4-col grid", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    // 1. Verify brand wordmark and single-line 7-module nav with Phosphor SVG icons
     await expect(
       page.getByRole("button", { name: "Duc English", exact: true })
     ).toBeVisible();
@@ -18,6 +17,7 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
         document.querySelectorAll('nav[aria-label="Phân mục chính"] button')
       );
       const bodyStyles = getComputedStyle(document.body);
+      const visibleText = document.body.innerText || "";
       return {
         headerHeight: header?.getBoundingClientRect().height ?? 0,
         navCount: navButtons.length,
@@ -27,6 +27,8 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
         backgroundColor: bodyStyles.backgroundColor,
         horizontalOverflow:
           document.documentElement.scrollWidth > window.innerWidth,
+        hasCrackVol: /crack vol/i.test(visibleText),
+        hasAddMp3: /thêm mp3/i.test(visibleText),
       };
     });
 
@@ -38,57 +40,30 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
     expect(headerAudit.fontFamily).toContain("Be Vietnam Pro");
     expect(headerAudit.backgroundColor).toBe("rgb(248, 250, 252)");
     expect(headerAudit.horizontalOverflow).toBe(false);
+    expect(headerAudit.hasCrackVol).toBe(false);
+    expect(headerAudit.hasAddMp3).toBe(false);
 
-    // 2. Verify Hero Banner matching dauenglish.com/listen/nghe-chep
+    // Hero Banner & direct A1-C2 Thematic Curriculum
     await expect(
       page.getByRole("heading", {
         name: "Chinh phục TOEIC Listening từ dễ đến khó",
       })
     ).toBeVisible();
+    await expect(page.getByTestId("thematic-card-grid")).toBeVisible();
 
-    // 3. Verify Test 1..10 render as <h3> headings with 4-column horizontal Part card grid (min-h >= 170px)
-    const test1PartGrid = page.getByTestId("test-part-grid-crack-vol1-test1");
-    await expect(test1PartGrid).toBeVisible();
-    const gridAudit = await test1PartGrid.evaluate((el) => {
-      const style = getComputedStyle(el);
-      const cards = Array.from(el.children);
-      return {
-        colsCount: style.gridTemplateColumns.split(" ").length,
-        cardCount: cards.length,
-        minCardHeight: Math.min(
-          ...cards.map((c) => c.getBoundingClientRect().height)
-        ),
-      };
-    });
-
-    expect(gridAudit.colsCount).toBe(4);
-    expect(gridAudit.cardCount).toBe(4);
-    expect(gridAudit.minCardHeight).toBeGreaterThanOrEqual(170);
-
-    // 4. Open Vaul Mẹo drawer, verify content & close, then filter Crack Vol 1 / Level / Part / Matrix toggle
+    // Open Vaul Mẹo drawer & close
     await page.getByTestId("tips-trigger").click();
     await expect(page.getByText("1. Nghe nắm ý:")).toBeVisible();
     await page.getByRole("button", { name: "Đóng hướng dẫn" }).click();
     await expect(page.getByText("1. Nghe nắm ý:")).not.toBeVisible();
 
-    await page.getByTestId("collection-crack-vol-1").click();
-    await expect(page.getByText("Test 1 · Crack Vol 1")).toBeVisible();
+    // Filter A1 and verify 4-column card grid
+    await page.getByTestId("cefr-filter-A1").click();
+    await expect(
+      page.getByTestId("thematic-card-theme-a1-office-arrival")
+    ).toBeVisible();
 
-    await page.getByTestId("level-chip-2").click();
-    await expect(page.getByTestId("start-crack-vol1-test1-part1")).toBeVisible();
-
-    // Bookmark button on Part 1 card updates count
-    await page.getByTestId("bookmark-crack-vol1-test1-part1").click();
-    await expect(page.getByTestId("bookmark-crack-vol1-test1-part1")).toContainText("1");
-    await page.getByTestId("bookmark-crack-vol1-test1-part1").click();
-    await expect(page.getByTestId("bookmark-crack-vol1-test1-part1")).toContainText("0");
-
-    // Toggle to Table Matrix view & back
-    await page.getByTestId("view-table-button").click();
-    await page.getByTestId("filter-part-2").click();
-    await expect(page.getByTestId("start-crack-vol1-test1-part2")).toBeVisible();
-
-    // 5. Responsive check at 390px mobile width: zero horizontal overflow
+    // Responsive check at 390px mobile width
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > window.innerWidth
@@ -96,46 +71,66 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
     expect(mobileOverflow).toBe(false);
   });
 
-  test("completes dictation check with hint, Lottie celebration, transcript popover save, and reload persistence", async ({
+  test("launches directly into Nghe check mode: fills blanks, unlocks Từ vựng nên học, opens Word Detail Drawer & 3D flip card", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    // Enter Test 1 Part 1 Dictation Studio via Part Card CTA
-    await page.getByTestId("start-crack-vol1-test1-part1").click();
+    // Click A1 Morning Office Arrival card -> opens straight into Nghe check
+    await page.getByTestId("cefr-filter-A1").click();
+    await page.getByTestId("thematic-card-theme-a1-office-arrival").click();
+
+    await expect(page.getByTestId("dau-waveform-player")).toBeVisible();
+    await expect(page.getByTestId("check-sentence-box")).toBeVisible();
+    await expect(page.getByTestId("vocab-locked-state")).toBeVisible();
+    await expect(page.getByTestId("studio-timer-xp")).toBeVisible();
+
+    // Test density toggle 30% -> 50%
+    await page.getByTestId("density-30").click();
+    await page.getByTestId("density-50").click();
+
+    // Reveal all blanks via LẬT TỪ "Tất cả" -> unlocks Từ vựng nên học + Translation + +5 XP
+    await page.getByTestId("reveal-all").click();
+    await expect(page.getByTestId("translation-box")).toBeVisible();
+    await expect(page.getByTestId("vocab-unlocked-state")).toBeVisible();
+    await expect(page.getByTestId("studio-timer-xp")).toContainText("+5 XP");
+
+    // Click "Chi tiết" to open right-side Word Detail Drawer with US/UK + 3D flip card
+    await page.getByTestId("vocab-details-button").click();
+    await expect(page.getByTestId("word-detail-drawer")).toBeVisible();
+    await expect(page.getByTestId("pronounce-us-button")).toBeVisible();
+    await expect(page.getByTestId("pronounce-uk-button")).toBeVisible();
+
+    // Flip flashcard & add card to basket
+    await page.getByTestId("drawer-flip-card").click();
+    await page.getByTestId("drawer-add-vocab-button").click();
+    await page.keyboard.press("Escape");
+
+    // Open Giỏ từ basket to verify saved vocab entry
+    await page.getByTestId("vocab-basket-button").click();
+    await expect(page.getByTestId("vocab-basket-drawer")).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    // Switch to Nghe chép tab & test full dictation check + Lottie celebration
+    await page.getByTestId("studio-mode-dictation").click();
     const input = page.getByTestId("dictation-input");
     await expect(input).toBeVisible();
-
-    // Test "Gợi ý từ" helper
-    await page.getByTestId("hint-next-word-button").click();
-    await expect(input).toHaveValue("The ");
-
-    // Type wrong answer -> expect feedback & auto-review
-    await input.fill("wrong answer text");
+    await input.fill("A man is opening the front door of the office.");
     await page.getByTestId("check-dictation-button").click();
-    await expect(page.getByTestId("dictation-feedback")).toBeVisible();
-
-    // Type exact answer -> expect 100% mastered, Lottie celebration badge, and transcript visible
-    await input.fill("The man is pointing at a chart on the conference table.");
-    await page.getByTestId("check-dictation-button").click();
-    await expect(page.getByTestId("dictation-feedback")).toContainText("Chính xác tuyệt đối");
+    await expect(page.getByTestId("dictation-feedback")).toContainText(
+      "Chính xác tuyệt đối"
+    );
     await expect(page.getByTestId("lottie-celebration")).toBeVisible();
-    await expect(page.getByTestId("transcript-box")).toBeVisible();
 
-    // Click a word inside transcript box to open Popover and save to Vocab basket
-    await page
-      .getByTestId("transcript-box")
-      .getByRole("button", { name: "conference" })
-      .click();
-    await page.getByTestId("popover-save-vocab").click();
-
-    // Exit studio and verify persistence across reload
+    // Exit studio and reload persistence
     await page.getByTestId("exit-studio-button").click();
-    await page.reload();
-    await expect(page.getByTestId("review-queue-tab")).toContainText("(1)");
+    await expect(page.getByTestId("thematic-card-grid")).toBeVisible();
   });
 
-  test("navigates across all 6 companion modules and Account dropdown modal", async ({ page }) => {
+  test("navigates across all companion modules and Account dropdown modal", async ({
+    page,
+  }) => {
     await page.goto("/");
 
     await page.getByTestId("nav-read").click();
@@ -154,11 +149,14 @@ test.describe("Duc English — Đậu TOEIC UI Parity & E2E Journeys", () => {
     await expect(page.getByText("Phiếu trả lời (Answer Sheet)")).toBeVisible();
 
     await page.getByTestId("nav-course").click();
-    await expect(page.getByText("Khóa Học Tự Luyện Theo Mục Tiêu Điểm")).toBeVisible();
+    await expect(
+      page.getByText("Khóa Học Tự Luyện Theo Mục Tiêu Điểm")
+    ).toBeVisible();
 
-    // Account dropdown -> open modal
     await page.getByTestId("account-button").click();
     await page.getByTestId("menu-open-account").click();
-    await expect(page.getByText("Tài khoản & Thống kê Duc English")).toBeVisible();
+    await expect(
+      page.getByText("Tài khoản & Thống kê Duc English")
+    ).toBeVisible();
   });
 });

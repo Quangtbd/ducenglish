@@ -47,17 +47,5 @@ export const CEFR_LEVEL_META: Record<
 };
 
 export const COLLECTION_TABS = [
-  { id: "all", label: "Tất cả bộ đề" },
-  { id: "crack-vol-1", label: "Crack Vol 1" },
-  { id: "crack-vol-2", label: "Crack Vol 2" },
-  { id: "2026", label: "2026" },
-  { id: "2025", label: "2025" },
-  { id: "2024", label: "2024" },
-  { id: "2023", label: "2023" },
-  { id: "2022", label: "2022" },
-  { id: "2021", label: "2021" },
-  { id: "2020", label: "2020" },
-  { id: "2019", label: "2019" },
-  { id: "thematic", label: "Theo chủ đề" },
-  { id: "custom", label: "Bài nghe tự thêm" },
+  { id: "thematic", label: "Lộ trình A1–C2" },
 ] as const;

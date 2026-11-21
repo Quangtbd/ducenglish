@@ -1,126 +1,155 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
 import { motion } from "motion/react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
-import NumberFlow from "@number-flow/react";
 import { useHotkeys } from "react-hotkeys-hook";
 import confetti from "canvas-confetti";
-import * as Accordion from "@radix-ui/react-accordion";
-import * as Switch from "@radix-ui/react-switch";
+import * as Popover from "@radix-ui/react-popover";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowLeft,
-  CaretLeft,
-  CaretRight,
-  CheckCircle,
-  WarningCircle,
-  Fire,
-  BookmarkSimple,
+  Bookmark,
+  Copy,
+  Check,
+  HelpCircle,
+  Lock,
   Eye,
-  EyeSlash,
-  CaretDown,
-  Lightbulb,
-  MagicWand,
-} from "@phosphor-icons/react";
+  Volume2,
+  Flag,
+  ShoppingBasket,
+  LayoutGrid,
+  Clock,
+  Zap,
+  BookOpen,
+  Plus,
+  Trash2,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 import type {
+  CefrLevel,
   DictationAttempt,
   DictationMode,
   GradingResult,
   ListeningQuestion,
   ReviewQueueItem,
   UserProfile,
+  VocabEntry,
+  VocabHighlight,
+  WordBlankToken,
 } from "../types/toeic";
 import {
   computeXpForAttempt,
-  generateClozePrompt,
   getNextWordHint,
-  gradeClozeAnswers,
   gradeDictation,
+  isBlankTokenMatch,
+  tokenizeSentenceForCheck,
 } from "../lib/dictationEngine";
+import {
+  getOfflineWordBadge,
+  playWordPronunciation,
+} from "../lib/dictionaryService";
 import {
   db,
   recordDictationAttempt,
   saveVocabToNotebook,
   toggleReviewQueueItem,
 } from "../lib/db";
-import { WaveSurferAudioPlayer } from "./WaveSurferAudioPlayer";
+import { DauWaveformPlayer } from "./DauWaveformPlayer";
 import { TranscriptAnnotator } from "./TranscriptAnnotator";
 import { LottieCelebration } from "./LottieCelebration";
-import { cn, LEVEL_LABELS, TOPIC_LABELS } from "../lib/utils";
+import { WordDetailDrawer } from "./WordDetailDrawer";
+import { cn, TOPIC_LABELS } from "../lib/utils";
 
 interface DictationStudioProps {
   title: string;
+  cefrLevel?: CefrLevel;
   questions: ListeningQuestion[];
   initialQuestionIndex?: number;
   initialMode?: DictationMode;
   attempts: DictationAttempt[];
   reviewQueue: ReviewQueueItem[];
+  vocabList: VocabEntry[];
   profile: UserProfile;
   onUpdateProfile: (values: Partial<UserProfile>) => void;
   onDataChanged: () => void;
   onExit: () => void;
 }
 
-const MODE_TABS: { id: DictationMode; label: string }[] = [
-  { id: "dictation", label: "Nghe chép chính tả" },
+const STUDIO_MODES: { id: DictationMode; label: string }[] = [
+  { id: "dictation", label: "Nghe chép" },
   { id: "check", label: "Nghe check" },
-  { id: "cloze", label: "Điền từ" },
   { id: "full", label: "Nghe full" },
 ];
 
+const DENSITY_OPTIONS: (30 | 50 | 100)[] = [30, 50, 100];
+
 export function DictationStudio({
   title,
+  cefrLevel = "B1",
   questions,
   initialQuestionIndex = 0,
-  initialMode = "dictation",
+  initialMode = "check",
   attempts,
   reviewQueue,
+  vocabList,
   profile,
   onUpdateProfile,
   onDataChanged,
   onExit,
 }: DictationStudioProps) {
   const [currentIndex, setCurrentIndex] = useState(initialQuestionIndex);
-  const [mode, setMode] = useState<DictationMode>(initialMode);
+  const [mode, setMode] = useState<DictationMode>(
+    initialMode === "cloze" ? "check" : initialMode
+  );
+  const [blankDensity, setBlankDensity] = useState<30 | 50 | 100>(50);
+  const [tokens, setTokens] = useState<WordBlankToken[]>([]);
+  const [activeBlankIdx, setActiveBlankIdx] = useState<number | null>(null);
+  const [checkCompletedIds, setCheckCompletedIds] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  // Full dictation state (for "Nghe chép" tab)
   const [userInput, setUserInput] = useState("");
   const [grading, setGrading] = useState<GradingResult | null>(null);
   const [shakeKey, setShakeKey] = useState(0);
   const [comboStreak, setComboStreak] = useState(0);
-  const [showTranscript, setShowTranscript] = useState(initialMode === "full");
-  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
-  const [choiceChecked, setChoiceChecked] = useState(false);
-  const [clozeAnswers, setClozeAnswers] = useState<Record<string, string>>({});
-  const [clozeResult, setClozeResult] = useState<ReturnType<typeof gradeClozeAnswers> | null>(
-    null
-  );
-  const [questionHistory, setQuestionHistory] = useState<DictationAttempt[]>([]);
-  const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(min-width: 1024px)").matches
-      : true
-  );
-  const replayTriggerRef = useRef<() => void>(() => {});
-  const [feedbackRef] = useAutoAnimate();
 
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
+  // Timer & session XP pill state ("3s • +5 XP")
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [sessionXp, setSessionXp] = useState(0);
+  const [rewardedQuestionIds, setRewardedQuestionIds] = useState<Set<string>>(
+    () => new Set()
+  );
+
+  // Drawers & Popovers
+  const [drawerWord, setDrawerWord] = useState<string | null>(null);
+  const [basketOpen, setBasketOpen] = useState(false);
+  const [reportPopoverOpen, setReportPopoverOpen] = useState(false);
+  const [reportNote, setReportNote] = useState("");
+  const [copiedSentence, setCopiedSentence] = useState(false);
+
+  const replayTriggerRef = useRef<() => void>(() => {});
+  const blankInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [feedbackRef] = useAutoAnimate();
 
   const question = questions[currentIndex];
   const isInReviewQueue = useMemo(
-    () => Boolean(question && reviewQueue.some((r) => r.questionId === question.id)),
+    () =>
+      Boolean(question && reviewQueue.some((r) => r.questionId === question.id)),
     [question, reviewQueue]
   );
 
-  const clozeSegments = useMemo(
-    () => (question ? generateClozePrompt(question.transcript) : []),
-    [question]
-  );
+  const savedWordsSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of vocabList) {
+      set.add(v.word.toLowerCase().trim());
+    }
+    return set;
+  }, [vocabList]);
 
-  // Best accuracy per question for the Pill Navigator
   const bestAccuracyMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of attempts) {
@@ -130,36 +159,43 @@ export function DictationStudio({
     return map;
   }, [attempts]);
 
+  // Live per-question timer (seconds)
+  useEffect(() => {
+    setElapsedSeconds(0);
+    const id = window.setInterval(() => {
+      setElapsedSeconds((s) => s + 1);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [question?.id]);
+
+  // Initialize blank tokens & reset states when question or density changes
   useEffect(() => {
     if (!question) return;
     let cancelled = false;
 
-    setGrading(null);
-    setSelectedChoice(null);
-    setChoiceChecked(false);
-    setClozeAnswers({});
-    setClozeResult(null);
-    setShowTranscript(mode === "full");
+    const vocabWords = question.keyVocab.map((v) => v.word);
+    const generated = tokenizeSentenceForCheck(
+      question.transcript,
+      blankDensity,
+      vocabWords
+    );
+    setTokens(generated);
+    const firstBlank = generated.findIndex((t) => t.isBlank);
+    setActiveBlankIdx(firstBlank >= 0 ? firstBlank : null);
 
-    Promise.all([
-      db.drafts.get(question.id),
-      db.attempts
-        .where("questionId")
-        .equals(question.id)
-        .reverse()
-        .limit(5)
-        .toArray(),
-    ]).then(([draft, history]) => {
+    setGrading(null);
+
+    db.drafts.get(question.id).then((draft) => {
       if (cancelled) return;
       setUserInput(draft?.draftText ?? "");
-      setQuestionHistory(history);
     });
 
     return () => {
       cancelled = true;
     };
-  }, [question?.id]);
+  }, [question?.id, blankDensity]);
 
+  // Auto-save dictation draft
   useEffect(() => {
     if (!question) return;
     const timer = setTimeout(() => {
@@ -172,18 +208,133 @@ export function DictationStudio({
     return () => clearTimeout(timer);
   }, [userInput, question?.id]);
 
-  useEffect(() => {
-    if (mode === "full") {
-      setShowTranscript(true);
+  // Check whether current sentence is completed in the active mode
+  const isCheckAllSolved = useMemo(() => {
+    const blanks = tokens.filter((t) => t.isBlank);
+    if (blanks.length === 0) return false;
+    return blanks.every(
+      (t) => t.status === "correct" || t.status === "revealed"
+    );
+  }, [tokens]);
+
+  const isSentenceCompleted =
+    mode === "full" ||
+    (mode === "check" &&
+      (isCheckAllSolved || (question ? checkCompletedIds.has(question.id) : false))) ||
+    (mode === "dictation" && grading?.status === "mastered");
+
+  // Award +5 XP & persist attempt when Nghe check completes a sentence
+  const finalizeCheckCompletion = async (targetQuestion: ListeningQuestion) => {
+    setCheckCompletedIds((prev) => new Set(prev).add(targetQuestion.id));
+
+    if (!rewardedQuestionIds.has(targetQuestion.id)) {
+      const deltaXp = 5;
+      setRewardedQuestionIds((prev) => new Set(prev).add(targetQuestion.id));
+      setSessionXp((xp) => xp + deltaXp);
+      onUpdateProfile({ xp: profile.xp + deltaXp });
+      toast.success(`Hoàn thành câu! +${deltaXp} XP`);
     }
-  }, [mode]);
+
+    await recordDictationAttempt({
+      questionId: targetQuestion.id,
+      testId: targetQuestion.testId,
+      part: targetQuestion.part,
+      mode: "check",
+      userText: targetQuestion.transcript,
+      accuracy: 100,
+      status: "mastered",
+      timestamp: Date.now(),
+    });
+    onDataChanged();
+  };
+
+  const handleBlankChange = (idx: number, rawVal: string) => {
+    if (!question) return;
+    const cleanTyped = rawVal.replace(/\s+/g, "");
+    const targetToken = tokens[idx];
+    if (!targetToken || !targetToken.isBlank) return;
+
+    const matched = isBlankTokenMatch(cleanTyped, targetToken.cleanWord);
+
+    const nextTokens = tokens.map((tok, i) => {
+      if (i !== idx) return tok;
+      if (matched) {
+        return {
+          ...tok,
+          userInput: tok.cleanWord,
+          status: "correct" as const,
+          revealed: true,
+        };
+      }
+      return {
+        ...tok,
+        userInput: cleanTyped,
+        status: "idle" as const,
+      };
+    });
+
+    setTokens(nextTokens);
+
+    if (matched) {
+      const nextBlankIdx = nextTokens.findIndex(
+        (t, i) => i > idx && t.isBlank && t.status !== "correct" && t.status !== "revealed"
+      );
+      const anyRemaining = nextTokens.findIndex(
+        (t) => t.isBlank && t.status !== "correct" && t.status !== "revealed"
+      );
+      const focusIdx = nextBlankIdx >= 0 ? nextBlankIdx : anyRemaining;
+      if (focusIdx >= 0) {
+        setActiveBlankIdx(focusIdx);
+        requestAnimationFrame(() => {
+          blankInputRefs.current[focusIdx]?.focus();
+        });
+      } else {
+        finalizeCheckCompletion(question);
+      }
+    }
+  };
+
+  const handleRevealWords = (count: number | "all") => {
+    if (!question || isSentenceCompleted) return;
+    let remainingToReveal = count === "all" ? Infinity : count;
+    const nextTokens = tokens.map((tok) => {
+      if (
+        tok.isBlank &&
+        tok.status !== "correct" &&
+        tok.status !== "revealed" &&
+        remainingToReveal > 0
+      ) {
+        remainingToReveal -= 1;
+        return {
+          ...tok,
+          userInput: tok.cleanWord,
+          revealed: true,
+          status: "revealed" as const,
+        };
+      }
+      return tok;
+    });
+    setTokens(nextTokens);
+
+    const nextUnfilled = nextTokens.findIndex(
+      (t) => t.isBlank && t.status !== "correct" && t.status !== "revealed"
+    );
+    if (nextUnfilled >= 0) {
+      setActiveBlankIdx(nextUnfilled);
+      requestAnimationFrame(() => {
+        blankInputRefs.current[nextUnfilled]?.focus();
+      });
+    } else {
+      finalizeCheckCompletion(question);
+    }
+  };
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
       setCurrentIndex((i) => i + 1);
     } else {
       confetti({ particleCount: 70, spread: 70, origin: { y: 0.65 } });
-      toast.success("Chúc mừng! Bạn đã hoàn thành trọn vẹn phần luyện tập này.");
+      toast.success("Chúc mừng! Bạn đã hoàn thành toàn bộ câu trong bài này.");
     }
   };
 
@@ -193,6 +344,7 @@ export function DictationStudio({
     }
   };
 
+  // Handler for "Nghe chép" full-sentence check
   const handleCheckDictation = async () => {
     if (!question) return;
 
@@ -207,17 +359,12 @@ export function DictationStudio({
     setGrading(result);
 
     const earnedXp = computeXpForAttempt(result.accuracy, comboStreak);
+    setSessionXp((xp) => xp + earnedXp);
     onUpdateProfile({ xp: profile.xp + earnedXp });
 
     if (result.status === "mastered") {
       setComboStreak((c) => c + 1);
-      setShowTranscript(true);
       confetti({ particleCount: 45, spread: 55, origin: { y: 0.72 } });
-      if (profile.autoAdvanceOnMastered && currentIndex < questions.length - 1) {
-        setTimeout(() => {
-          setCurrentIndex((i) => i + 1);
-        }, 1200);
-      }
     } else {
       setComboStreak(0);
       setShakeKey((k) => k + 1);
@@ -234,95 +381,75 @@ export function DictationStudio({
       timestamp: Date.now(),
     });
 
-    if (result.shouldAutoReview) {
-      toast.info("Đã tự động lưu câu này vào 'Câu cần luyện lại'.");
-    }
-
-    const updatedHistory = await db.attempts
-      .where("questionId")
-      .equals(question.id)
-      .reverse()
-      .limit(5)
-      .toArray();
-    setQuestionHistory(updatedHistory);
     onDataChanged();
   };
 
-  const handleHintNextWord = () => {
+  const handleAddSingleVocab = async (v: VocabHighlight) => {
     if (!question) return;
-    const hinted = getNextWordHint(userInput, question.transcript);
-    setUserInput(hinted);
-  };
-
-  const handleCheckCloze = async () => {
-    if (!question) return;
-    const res = gradeClozeAnswers(clozeSegments, clozeAnswers);
-    setClozeResult(res);
-    if (res.accuracy >= 80) {
-      confetti({ particleCount: 40, spread: 50, origin: { y: 0.7 } });
-    }
-    await recordDictationAttempt({
-      questionId: question.id,
-      testId: question.testId,
-      part: question.part,
-      mode: "cloze",
-      userText: Object.values(clozeAnswers).join(" "),
-      accuracy: res.accuracy,
-      status: res.accuracy >= 95 ? "mastered" : res.accuracy >= 70 ? "near" : "weak",
-      timestamp: Date.now(),
-    });
-    onDataChanged();
-  };
-
-  const handleCheckMultipleChoice = async () => {
-    if (!question || selectedChoice === null) return;
-    setChoiceChecked(true);
-    const isRight = selectedChoice === question.correctChoiceIndex;
-    if (isRight) {
-      confetti({ particleCount: 35, spread: 50, origin: { y: 0.7 } });
-    }
-    await recordDictationAttempt({
-      questionId: question.id,
-      testId: question.testId,
-      part: question.part,
-      mode: "check",
-      userText: question.choices?.[selectedChoice] ?? "",
-      accuracy: isRight ? 100 : 40,
-      status: isRight ? "mastered" : "weak",
-      timestamp: Date.now(),
-    });
-    onDataChanged();
-  };
-
-  const handleToggleReview = async () => {
-    if (!question) return;
-    const added = await toggleReviewQueueItem(question.id, grading?.accuracy ?? 0);
-    onDataChanged();
-    toast.success(
-      added
-        ? "Đã thêm vào danh sách Câu cần luyện lại."
-        : "Đã bỏ khỏi danh sách Câu cần luyện lại."
-    );
-  };
-
-  const handleSaveVocab = async (item: ListeningQuestion["keyVocab"][number]) => {
-    if (!question) return;
-    const { created } = await saveVocabToNotebook({
-      word: item.word,
-      phonetic: item.phonetic,
-      partOfSpeech: item.partOfSpeech,
-      meaningVi: item.meaningVi,
-      exampleSentence: item.exampleSentence,
-      topic: TOPIC_LABELS[question.topic],
+    const res = await saveVocabToNotebook({
+      word: v.word,
+      phonetic: v.phonetic,
+      partOfSpeech: v.partOfSpeech,
+      meaningVi: v.meaningVi,
+      exampleSentence: v.exampleSentence,
+      topic: question.topic,
       sourceQuestionId: question.id,
     });
     onDataChanged();
-    if (created) {
-      toast.success(`Đã lưu từ "${item.word}" vào Giỏ từ vựng!`);
-    } else {
-      toast.info(`Từ "${item.word}" đã có trong Giỏ từ vựng.`);
-    }
+    toast.success(
+      res.created
+        ? `Đã thêm "${v.word}" vào Giỏ từ`
+        : `"${v.word}" đã có trong Giỏ từ`
+    );
   };
+
+  const handleAddAllVocab = async () => {
+    if (!question) return;
+    let addedCount = 0;
+    for (const v of question.keyVocab) {
+      const res = await saveVocabToNotebook({
+        word: v.word,
+        phonetic: v.phonetic,
+        partOfSpeech: v.partOfSpeech,
+        meaningVi: v.meaningVi,
+        exampleSentence: v.exampleSentence,
+        topic: question.topic,
+        sourceQuestionId: question.id,
+      });
+      if (res.created) addedCount += 1;
+    }
+    onDataChanged();
+    toast.success(
+      addedCount > 0
+        ? `Đã thêm ${addedCount} từ vào Giỏ từ`
+        : "Tất cả từ vựng của câu đã có trong Giỏ từ"
+    );
+  };
+
+  // Global keyboard shortcuts matching bottom bar:
+  // "Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu"
+  useEffect(() => {
+    let ctrlComboUsed = false;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Control" && e.ctrlKey) {
+        ctrlComboUsed = true;
+      }
+      if (e.key === "Control") {
+        ctrlComboUsed = false;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control" && !ctrlComboUsed) {
+        replayTriggerRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   useHotkeys(
     "ctrl+space",
@@ -330,807 +457,966 @@ export function DictationStudio({
       e.preventDefault();
       replayTriggerRef.current();
     },
-    { enableOnFormTags: ["INPUT", "TEXTAREA"] }
+    { enableOnFormTags: true }
   );
 
   useHotkeys(
-    "alt+n",
+    "tab",
     (e) => {
-      e.preventDefault();
-      handleNext();
+      if (mode === "check" && !isSentenceCompleted && !drawerWord) {
+        e.preventDefault();
+        handleRevealWords(1);
+      }
     },
-    { enableOnFormTags: ["INPUT", "TEXTAREA"] }
+    { enableOnFormTags: true },
+    [mode, isSentenceCompleted, tokens, drawerWord]
   );
 
   useHotkeys(
-    "alt+p",
+    "enter",
     (e) => {
+      if (drawerWord || basketOpen) return;
+      if (mode === "check") {
+        e.preventDefault();
+        if (isSentenceCompleted) {
+          handleNext();
+        } else if (activeBlankIdx !== null) {
+          const cur = tokens[activeBlankIdx];
+          if (cur && !isBlankTokenMatch(cur.userInput, cur.cleanWord)) {
+            setShakeKey((k) => k + 1);
+            toast.info("Từ chưa khớp, thử nghe lại hoặc bấm Tab để lật 1 từ nhé.");
+          }
+        }
+      }
+    },
+    { enableOnFormTags: true },
+    [mode, isSentenceCompleted, currentIndex, activeBlankIdx, tokens, drawerWord, basketOpen]
+  );
+
+  useHotkeys(
+    "left",
+    (e) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       e.preventDefault();
       handlePrev();
     },
-    { enableOnFormTags: ["INPUT", "TEXTAREA"] }
+    {},
+    [currentIndex]
+  );
+
+  useHotkeys(
+    "right",
+    (e) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      e.preventDefault();
+      handleNext();
+    },
+    {},
+    [currentIndex, questions.length]
   );
 
   if (!question) {
     return (
-      <div className="mx-auto max-w-4xl py-12 text-center">
-        <p className="text-slate-600">Không tìm thấy câu hỏi luyện tập.</p>
+      <div className="rounded-xl border border-[#e1e7ef] bg-white p-8 text-center">
+        <p className="text-slate-600">Không có câu hỏi nào trong phần này.</p>
         <button
           type="button"
           onClick={onExit}
-          className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          className="mt-4 rounded-lg bg-[#2463eb] px-4 py-2 text-sm font-semibold text-white"
         >
-          Quay lại danh sách
+          Quay lại lộ trình A1–C2
         </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Studio Header + Question Navigator Pills */}
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onExit}
-              data-testid="exit-studio-button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              <ArrowLeft size={15} />
-              <span>Danh sách</span>
-            </button>
-            <div>
-              <h2 className="font-display text-base font-bold text-slate-900 dark:text-slate-50">
-                {title}
-              </h2>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                <span>Part {question.part}</span>
-                <span aria-hidden="true">·</span>
-                <span>{LEVEL_LABELS[question.level]}</span>
-                <span aria-hidden="true">·</span>
-                <span className="font-mono tabular-nums">
-                  Câu {currentIndex + 1}/{questions.length}
-                </span>
-              </div>
-            </div>
-          </div>
+    <div
+      data-testid="dictation-studio"
+      className="flex min-h-[calc(100vh-140px)] flex-col justify-between gap-5 pb-16"
+    >
+      {/* 1. Top Studio Bar matching Screenshots 1 & 2 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-3 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={onExit}
+          data-testid="exit-studio-button"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Thoát</span>
+        </button>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              Chuỗi đúng:{" "}
-              <span className="font-mono text-sm font-bold text-emerald-600 tabular-nums">
-                <NumberFlow value={comboStreak} />
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleToggleReview}
-              data-testid="toggle-review-button"
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors",
-                isInReviewQueue
-                  ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/60 dark:text-rose-300"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-              )}
-            >
-              <Fire size={15} weight={isInReviewQueue ? "fill" : "duotone"} />
-              <span>{isInReviewQueue ? "Đã lưu luyện lại" : "Lưu luyện lại"}</span>
-            </button>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handlePrev}
-                disabled={currentIndex === 0}
-                aria-label="Câu trước"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
-              >
-                <CaretLeft size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                aria-label="Câu tiếp theo"
-                data-testid="next-question-button"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"
-              >
-                <CaretRight size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Question Number Pills Navigator */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {questions.map((q, idx) => {
-              const best = bestAccuracyMap.get(q.id);
-              const isCurrent = idx === currentIndex;
-              const isReview = reviewQueue.some((r) => r.questionId === q.id);
-
-              return (
-                <button
-                  key={q.id}
-                  type="button"
-                  onClick={() => setCurrentIndex(idx)}
-                  data-testid={`question-pill-${idx + 1}`}
-                  className={cn(
-                    "h-7 min-w-7 rounded-md border px-2 font-mono text-xs font-semibold tabular-nums transition-colors",
-                    isCurrent
-                      ? "border-blue-600 bg-blue-600 text-white"
-                      : best !== undefined && best >= 80
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                      : isReview
-                      ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                      : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-                  )}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
-            <label className="flex items-center gap-2">
-              <Switch.Root
-                checked={profile.autoAdvanceOnMastered}
-                onCheckedChange={(checked) =>
-                  onUpdateProfile({ autoAdvanceOnMastered: checked })
-                }
-                className="relative h-5 w-9 cursor-pointer rounded-full bg-slate-200 transition-colors data-[state=checked]:bg-blue-600 dark:bg-slate-700"
-              >
-                <Switch.Thumb className="block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow-xs transition-transform data-[state=checked]:translate-x-4.5" />
-              </Switch.Root>
-              <span>Tự qua câu khi đạt</span>
-            </label>
-
-            <label className="flex items-center gap-2">
-              <Switch.Root
-                checked={profile.strictPunctuation}
-                onCheckedChange={(checked) =>
-                  onUpdateProfile({ strictPunctuation: checked })
-                }
-                className="relative h-5 w-9 cursor-pointer rounded-full bg-slate-200 transition-colors data-[state=checked]:bg-blue-600 dark:bg-slate-700"
-              >
-                <Switch.Thumb className="block h-4 w-4 translate-x-0.5 rounded-full bg-white shadow-xs transition-transform data-[state=checked]:translate-x-4.5" />
-              </Switch.Root>
-              <span>Chấm chặt dấu câu</span>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Mode Switcher Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800/80">
-          {MODE_TABS.map((tab) => {
-            const isActive = mode === tab.id;
+        {/* Center Segmented Mode Tabs: Nghe chép | Nghe check | Nghe full */}
+        <div
+          role="tablist"
+          aria-label="Chế độ luyện nghe"
+          className="inline-flex items-center gap-1 rounded-full border border-[#e1e7ef] bg-white p-1 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+        >
+          {STUDIO_MODES.map((m) => {
+            const active = mode === m.id;
             return (
               <button
-                key={tab.id}
+                key={m.id}
                 type="button"
-                onClick={() => setMode(tab.id)}
-                data-testid={`mode-${tab.id}`}
-                className="relative rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
-              >
-                {isActive && (
-                  <motion.span
-                    layoutId="dictationModePill"
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                    className="absolute inset-0 rounded-lg bg-white shadow-xs dark:bg-slate-900"
-                  />
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMode(m.id)}
+                data-testid={`studio-mode-${m.id}`}
+                className={cn(
+                  "cursor-pointer whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-semibold transition-all",
+                  active
+                    ? "bg-[#2463eb] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
                 )}
-                <span
-                  className={cn(
-                    "relative z-10",
-                    isActive
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
-                  )}
-                >
-                  {tab.label}
-                </span>
+              >
+                {m.label}
               </button>
             );
           })}
         </div>
 
-        <span className="text-xs text-slate-500">
-          Phím tắt: <kbd className="font-mono">Ctrl+Space</kbd> nghe lại ·{" "}
-          <kbd className="font-mono">Enter</kbd> chấm bài ·{" "}
-          <kbd className="font-mono">Alt+N</kbd> câu kế
-        </span>
+        {/* Right Amber Pill: 3s • +5 XP */}
+        <div
+          data-testid="studio-timer-xp"
+          className="inline-flex items-center gap-2 rounded-full border border-amber-200/80 bg-amber-50 px-3.5 py-1.5 text-sm font-semibold text-amber-700 tabular-nums dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300"
+        >
+          <span className="inline-flex items-center gap-1">
+            <Clock className="h-3.5 w-3.5" />
+            <span className="font-mono">{elapsedSeconds}s</span>
+          </span>
+          <span aria-hidden="true">•</span>
+          <span className="inline-flex items-center gap-1">
+            <Zap className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+            <span className="font-mono">+{sessionXp} XP</span>
+          </span>
+        </div>
       </div>
 
-      {/* Resizable Split Workspace (Desktop) or Stacked View (Mobile) */}
-      {isDesktop ? (
-        <Group orientation="horizontal" className="min-h-[540px] gap-2">
-          <Panel defaultSize="58" minSize="40">
-            <LeftPracticePane
-              question={question}
-              mode={mode}
-              profile={profile}
-              userInput={userInput}
-              setUserInput={setUserInput}
-              grading={grading}
-              shakeKey={shakeKey}
-              feedbackRef={feedbackRef}
-              onCheckDictation={handleCheckDictation}
-              onHintNextWord={handleHintNextWord}
-              onUpdatePlaybackRate={(rate) =>
-                onUpdateProfile({ playbackRate: rate })
-              }
-              registerReplayTrigger={(fn) => {
-                replayTriggerRef.current = fn;
-              }}
-              selectedChoice={selectedChoice}
-              setSelectedChoice={setSelectedChoice}
-              choiceChecked={choiceChecked}
-              onCheckMultipleChoice={handleCheckMultipleChoice}
-              clozeSegments={clozeSegments}
-              clozeAnswers={clozeAnswers}
-              setClozeAnswers={setClozeAnswers}
-              clozeResult={clozeResult}
-              onCheckCloze={handleCheckCloze}
-              comboStreak={comboStreak}
-              onNext={handleNext}
-            />
-          </Panel>
-
-          <Separator className="flex w-2 items-center justify-center rounded-full bg-slate-200/70 transition-colors hover:bg-blue-400 dark:bg-slate-800 dark:hover:bg-blue-600" />
-
-          <Panel defaultSize="42" minSize="28">
-            <RightInspectorPane
-              question={question}
-              showTranscript={showTranscript}
-              onToggleTranscript={() => setShowTranscript((v) => !v)}
-              questionHistory={questionHistory}
-              onSaveVocab={handleSaveVocab}
-              onDataChanged={onDataChanged}
-            />
-          </Panel>
-        </Group>
-      ) : (
+      {/* 2. Main 2-Column Workspace */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.55fr)_minmax(320px,1fr)] lg:items-start">
+        {/* LEFT COLUMN: Audio Waveform + Interactive Blank / Dictation Card */}
         <div className="space-y-4">
-          <LeftPracticePane
+          <DauWaveformPlayer
             question={question}
-            mode={mode}
-            profile={profile}
-            userInput={userInput}
-            setUserInput={setUserInput}
-            grading={grading}
-            shakeKey={shakeKey}
-            feedbackRef={feedbackRef}
-            onCheckDictation={handleCheckDictation}
-            onHintNextWord={handleHintNextWord}
-            onUpdatePlaybackRate={(rate) =>
-              onUpdateProfile({ playbackRate: rate })
-            }
+            playbackRate={profile.playbackRate}
+            onChangePlaybackRate={(rate) => onUpdateProfile({ playbackRate: rate })}
             registerReplayTrigger={(fn) => {
               replayTriggerRef.current = fn;
             }}
-            selectedChoice={selectedChoice}
-            setSelectedChoice={setSelectedChoice}
-            choiceChecked={choiceChecked}
-            onCheckMultipleChoice={handleCheckMultipleChoice}
-            clozeSegments={clozeSegments}
-            clozeAnswers={clozeAnswers}
-            setClozeAnswers={setClozeAnswers}
-            clozeResult={clozeResult}
-            onCheckCloze={handleCheckCloze}
-            comboStreak={comboStreak}
-            onNext={handleNext}
           />
-          <RightInspectorPane
-            question={question}
-            showTranscript={showTranscript}
-            onToggleTranscript={() => setShowTranscript((v) => !v)}
-            questionHistory={questionHistory}
-            onSaveVocab={handleSaveVocab}
-            onDataChanged={onDataChanged}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
 
-interface LeftPracticePaneProps {
-  question: ListeningQuestion;
-  mode: DictationMode;
-  profile: UserProfile;
-  userInput: string;
-  setUserInput: (val: string) => void;
-  grading: GradingResult | null;
-  shakeKey: number;
-  feedbackRef: React.Ref<HTMLDivElement>;
-  onCheckDictation: () => void;
-  onHintNextWord: () => void;
-  onUpdatePlaybackRate: (rate: number) => void;
-  registerReplayTrigger: (fn: () => void) => void;
-  selectedChoice: number | null;
-  setSelectedChoice: (idx: number) => void;
-  choiceChecked: boolean;
-  onCheckMultipleChoice: () => void;
-  clozeSegments: ReturnType<typeof generateClozePrompt>;
-  clozeAnswers: Record<string, string>;
-  setClozeAnswers: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-  clozeResult: ReturnType<typeof gradeClozeAnswers> | null;
-  onCheckCloze: () => void;
-  comboStreak: number;
-  onNext: () => void;
-}
-
-function LeftPracticePane({
-  question,
-  mode,
-  profile,
-  userInput,
-  setUserInput,
-  grading,
-  shakeKey,
-  feedbackRef,
-  onCheckDictation,
-  onHintNextWord,
-  onUpdatePlaybackRate,
-  registerReplayTrigger,
-  selectedChoice,
-  setSelectedChoice,
-  choiceChecked,
-  onCheckMultipleChoice,
-  clozeSegments,
-  clozeAnswers,
-  setClozeAnswers,
-  clozeResult,
-  onCheckCloze,
-  comboStreak,
-  onNext,
-}: LeftPracticePaneProps) {
-  return (
-    <div className="flex h-full flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      {question.imageUrl && (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950">
-          <img
-            src={question.imageUrl}
-            alt={question.title}
-            referrerPolicy="no-referrer"
-            className="h-52 w-full object-cover"
-          />
-        </div>
-      )}
-
-      <WaveSurferAudioPlayer
-        question={question}
-        playbackRate={profile.playbackRate}
-        onChangePlaybackRate={onUpdatePlaybackRate}
-        registerReplayTrigger={registerReplayTrigger}
-      />
-
-      {mode === "dictation" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <label
-              htmlFor="dictation-input"
-              className="font-semibold text-slate-700 dark:text-slate-300"
-            >
-              Gõ lại chính xác câu bạn nghe được:
-            </label>
-            {grading && (
-              <span className="font-mono font-bold text-slate-900 tabular-nums dark:text-slate-100">
-                Độ chính xác: <NumberFlow value={grading.accuracy} />%
-              </span>
-            )}
-          </div>
-
-          <motion.div
-            key={shakeKey}
-            animate={
-              grading && grading.status !== "mastered"
-                ? { x: [-8, 8, -5, 5, -2, 2, 0] }
-                : { x: 0 }
-            }
-            transition={{ duration: 0.28 }}
-          >
-            <textarea
-              id="dictation-input"
-              data-testid="dictation-input"
-              rows={3}
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  onCheckDictation();
-                }
-              }}
-              placeholder="Nhấn Ctrl+Space để nghe, sau đó gõ tiếng Anh tại đây và nhấn Enter..."
-              className={cn(
-                "w-full rounded-xl border-2 px-4 py-3 text-base leading-relaxed outline-none transition-colors dark:bg-slate-950",
-                grading?.status === "mastered"
-                  ? "border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20"
-                  : grading
-                  ? "border-rose-400 bg-rose-50/30 dark:bg-rose-950/20"
-                  : "border-slate-200 focus:border-blue-600 dark:border-slate-700"
+          {/* Main Exercise Card */}
+          <div className="rounded-2xl border border-[#e1e7ef] bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            {/* Card Toolbar: Density 30% | 50% | 100% (or mode label) + Bookmark / Copy / Hỏi bài */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {mode === "check" ? (
+                <div className="inline-flex items-center gap-1 rounded-xl border border-[#e1e7ef] bg-slate-50 p-1 dark:border-slate-800 dark:bg-slate-950">
+                  {DENSITY_OPTIONS.map((pct) => {
+                    const active = blankDensity === pct;
+                    return (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setBlankDensity(pct)}
+                        data-testid={`density-${pct}`}
+                        className={cn(
+                          "cursor-pointer rounded-lg px-3 py-1 font-mono text-xs font-semibold tabular-nums transition-all",
+                          active
+                            ? "bg-[#2463eb] text-white shadow-xs"
+                            : "text-slate-600 hover:text-slate-900 dark:text-slate-300"
+                        )}
+                      >
+                        {pct}%
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  {title} · Câu {currentIndex + 1}/{questions.length}
+                </span>
               )}
-            />
-          </motion.div>
 
-          <div ref={feedbackRef} className="space-y-3">
-            {grading && (
-              <div
-                data-testid="dictation-feedback"
-                className={cn(
-                  "rounded-xl border p-4 text-sm",
-                  grading.status === "mastered"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"
-                    : grading.status === "near"
-                    ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
-                    : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
-                )}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                    {grading.status === "mastered" ? (
-                      <CheckCircle size={20} weight="fill" className="mt-0.5 shrink-0" />
-                    ) : (
-                      <WarningCircle size={20} weight="fill" className="mt-0.5 shrink-0" />
-                    )}
-                    <div className="space-y-2">
-                      <p className="font-medium">{grading.feedbackMessage}</p>
-                      <div className="rounded-lg bg-white/80 p-3 font-sans text-sm leading-relaxed text-slate-900 dark:bg-slate-900/80 dark:text-slate-100">
-                        <span className="mr-2 text-xs font-semibold text-slate-500">
-                          Đối chiếu từng từ:
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const added = await toggleReviewQueueItem(question.id, 0);
+                    onDataChanged();
+                    toast.success(
+                      added
+                        ? "Đã lưu vào Câu cần luyện lại"
+                        : "Đã bỏ lưu khỏi Câu cần luyện lại"
+                    );
+                  }}
+                  title="Lưu câu cần luyện lại"
+                  aria-label="Lưu câu cần luyện lại"
+                  className={cn(
+                    "inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border transition-colors",
+                    isInReviewQueue
+                      ? "border-rose-200 bg-rose-50 text-rose-600 dark:border-rose-900 dark:bg-rose-950/60"
+                      : "border-[#e1e7ef] bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  )}
+                >
+                  <Bookmark
+                    className={cn("h-4 w-4", isInReviewQueue && "fill-current")}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(question.transcript);
+                    setCopiedSentence(true);
+                    toast.success("Đã sao chép câu tiếng Anh");
+                    setTimeout(() => setCopiedSentence(false), 1500);
+                  }}
+                  title="Sao chép câu"
+                  aria-label="Sao chép câu"
+                  className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl border border-[#e1e7ef] bg-white text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                >
+                  {copiedSentence ? (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </button>
+
+                {/* Hỏi bài Popover: Linked Speech & Grammar breakdown */}
+                <Popover.Root>
+                  <Popover.Trigger asChild>
+                    <button
+                      type="button"
+                      data-testid="ask-lesson-button"
+                      className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-xl border border-[#e1e7ef] bg-white px-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <HelpCircle className="h-4 w-4 text-[#2463eb]" />
+                      <span>Hỏi bài</span>
+                    </button>
+                  </Popover.Trigger>
+                  <Popover.Portal>
+                    <Popover.Content
+                      sideOffset={8}
+                      align="end"
+                      className="z-50 w-80 rounded-xl border border-[#e1e7ef] bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900"
+                    >
+                      <p className="font-display text-sm font-bold text-slate-900 dark:text-slate-50">
+                        Giải thích câu nghe
+                      </p>
+                      <div className="mt-3 space-y-2.5 text-xs leading-relaxed">
+                        <div className="rounded-lg bg-[#eff6ff] p-2.5 text-slate-700 dark:bg-blue-950/50 dark:text-slate-200">
+                          <span className="font-semibold text-[#1d4ed8] dark:text-blue-300">
+                            Nối âm &amp; phát âm:{" "}
+                          </span>
+                          {question.linkedSpeechTip}
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-2.5 text-slate-700 dark:bg-slate-950 dark:text-slate-300">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
+                            Ngữ pháp trọng tâm:{" "}
+                          </span>
+                          {question.grammarNote}
+                        </div>
+                      </div>
+                    </Popover.Content>
+                  </Popover.Portal>
+                </Popover.Root>
+              </div>
+            </div>
+
+            {/* MODE 1 (DEFAULT): NGHE CHECK — Inline Fill-in-the-Blank Slots */}
+            {mode === "check" && (
+              <div className="mt-4 space-y-4">
+                <motion.div
+                  key={shakeKey}
+                  animate={shakeKey > 0 ? { x: [0, -5, 5, -3, 3, 0] } : undefined}
+                  transition={{ duration: 0.25 }}
+                  data-testid="check-sentence-box"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-3 rounded-xl bg-slate-50/85 p-4 text-base leading-relaxed dark:bg-slate-950/80"
+                >
+                  {tokens.map((tok, idx) => {
+                    if (!tok.isWord) {
+                      return (
+                        <span key={tok.id} className="text-slate-600">
+                          {tok.raw}
                         </span>
-                        {grading.diffTokens.map((tok, idx) => (
+                      );
+                    }
+
+                    const isSolvedBlank =
+                      tok.isBlank &&
+                      (tok.status === "correct" || tok.status === "revealed");
+
+                    // Non-blank word or already solved/revealed blank
+                    if (!tok.isBlank || isSolvedBlank) {
+                      const clickable = isSentenceCompleted || isSolvedBlank;
+                      return (
+                        <span key={tok.id} className="inline-flex items-center">
+                          {tok.leadingPunctuation && (
+                            <span className="text-slate-500">
+                              {tok.leadingPunctuation}
+                            </span>
+                          )}
+                          {clickable ? (
+                            <button
+                              type="button"
+                              onClick={() => setDrawerWord(tok.cleanWord)}
+                              data-testid={`word-chip-${tok.cleanWord.toLowerCase()}`}
+                              className={cn(
+                                "cursor-pointer rounded-md px-2 py-0.5 text-[15px] font-medium transition-colors",
+                                isSolvedBlank
+                                  ? "bg-emerald-100/90 font-semibold text-emerald-800 hover:bg-emerald-200/80 dark:bg-emerald-950/70 dark:text-emerald-300"
+                                  : "text-slate-800 hover:bg-[#eff6ff] hover:text-[#2463eb] dark:text-slate-100"
+                              )}
+                            >
+                              {tok.cleanWord}
+                            </button>
+                          ) : (
+                            <span className="text-[15px] font-medium text-slate-700 dark:text-slate-200">
+                              {tok.cleanWord}
+                            </span>
+                          )}
+                          {tok.trailingPunctuation && (
+                            <span className="ml-0.5 text-slate-600">
+                              {tok.trailingPunctuation}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    }
+
+                    // Active blank input slot matching Screenshot 1
+                    const inputWidth = Math.max(
+                      64,
+                      tok.cleanWord.length * 10 + 22
+                    );
+                    return (
+                      <span key={tok.id} className="inline-flex items-center">
+                        {tok.leadingPunctuation && (
+                          <span className="mr-0.5 text-slate-500">
+                            {tok.leadingPunctuation}
+                          </span>
+                        )}
+                        <input
+                          ref={(el) => {
+                            blankInputRefs.current[idx] = el;
+                          }}
+                          type="text"
+                          value={tok.userInput}
+                          onFocus={() => setActiveBlankIdx(idx)}
+                          onChange={(e) => handleBlankChange(idx, e.target.value)}
+                          data-testid={`blank-input-${idx}`}
+                          aria-label={`Ô điền từ thứ ${idx + 1}`}
+                          autoComplete="off"
+                          spellCheck={false}
+                          style={{ width: `${inputWidth}px` }}
+                          className="h-9 rounded-lg border border-slate-200 bg-slate-200/75 px-2.5 text-center text-[15px] font-medium text-slate-900 transition-colors outline-none focus:border-[#2463eb] focus:bg-white focus:ring-2 focus:ring-[#2463eb]/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus:bg-slate-900"
+                        />
+                        {tok.trailingPunctuation && (
+                          <span className="ml-1 text-slate-600">
+                            {tok.trailingPunctuation}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </motion.div>
+
+                {/* Completed Translation Box matching Screenshot 2 */}
+                {isSentenceCompleted && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    data-testid="translation-box"
+                    className="rounded-xl border border-[#2463eb]/25 bg-[#eff6ff]/70 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950/40"
+                  >
+                    <p className="font-semibold text-[#1d4ed8] dark:text-blue-300">
+                      Dịch nghĩa:
+                    </p>
+                    <p className="mt-0.5 text-[#1d4ed8] dark:text-blue-200">
+                      {question.transcriptVi}
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* LẬT TỪ Controls matching Screenshots 1 & 2 */}
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="mr-1 text-xs font-bold tracking-wider text-slate-400 uppercase">
+                    LẬT TỪ
+                  </span>
+                  {(
+                    [
+                      { label: "1 từ", count: 1, testId: "reveal-1" },
+                      { label: "2 từ", count: 2, testId: "reveal-2" },
+                      { label: "3 từ", count: 3, testId: "reveal-3" },
+                      { label: "Tất cả", count: "all" as const, testId: "reveal-all" },
+                    ] as const
+                  ).map((btn) => (
+                    <button
+                      key={btn.testId}
+                      type="button"
+                      disabled={isSentenceCompleted}
+                      onClick={() => handleRevealWords(btn.count)}
+                      data-testid={btn.testId}
+                      className={cn(
+                        "rounded-xl border px-3.5 py-1.5 text-sm font-medium transition-colors",
+                        isSentenceCompleted
+                          ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-600"
+                          : "cursor-pointer border-[#e1e7ef] bg-white text-slate-700 hover:border-[#2463eb]/40 hover:bg-[#eff6ff] hover:text-[#2463eb] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                      )}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* MODE 2: NGHE CHÉP — Full Sentence Free Dictation */}
+            {mode === "dictation" && (
+              <div className="mt-4 space-y-3">
+                <motion.div
+                  key={shakeKey}
+                  animate={shakeKey > 0 ? { x: [0, -6, 6, -4, 4, 0] } : undefined}
+                  transition={{ duration: 0.25 }}
+                >
+                  <textarea
+                    rows={3}
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    data-testid="dictation-input"
+                    placeholder="Gõ lại toàn bộ câu bạn nghe được..."
+                    className="w-full rounded-xl border border-[#e1e7ef] bg-slate-50/70 p-4 text-base leading-relaxed text-slate-900 outline-none focus:border-[#2463eb] focus:bg-white focus:ring-2 focus:ring-[#2463eb]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </motion.div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextText = getNextWordHint(
+                        userInput,
+                        question.transcript
+                      );
+                      setUserInput(nextText);
+                    }}
+                    data-testid="hint-next-word-button"
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e1e7ef] bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    <Sparkles className="h-4 w-4 text-amber-500" />
+                    <span>Gợi ý từ tiếp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCheckDictation}
+                    data-testid="check-dictation-button"
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#2463eb] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#1d4ed8]"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>
+                      {grading?.status === "mastered"
+                        ? "Câu tiếp theo"
+                        : "Kiểm tra đáp án"}
+                    </span>
+                  </button>
+                </div>
+
+                <div ref={feedbackRef}>
+                  {grading && (
+                    <div
+                      data-testid="dictation-feedback"
+                      className={cn(
+                        "rounded-xl border p-4 text-sm",
+                        grading.status === "mastered"
+                          ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/30"
+                          : grading.status === "near"
+                          ? "border-amber-200 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/30"
+                          : "border-rose-200 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/30"
+                      )}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-100">
+                          {grading.status === "mastered" ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-rose-600" />
+                          )}
+                          {grading.status === "mastered"
+                            ? "Chính xác tuyệt đối!"
+                            : "Đối chiếu từng từ:"}
+                        </span>
+                        <span className="font-mono font-bold text-[#2463eb] tabular-nums">
+                          {grading.accuracy}%
+                        </span>
+                      </div>
+
+                      {grading.status === "mastered" && (
+                        <div className="mt-2">
+                          <LottieCelebration comboStreak={comboStreak} />
+                        </div>
+                      )}
+
+                      <p className="mt-2 leading-relaxed">
+                        {grading.diffTokens.map((tok, i) => (
                           <span
-                            key={idx}
+                            key={i}
                             className={cn(
-                              tok.type === "matched" && "text-emerald-700 dark:text-emerald-300",
+                              tok.type === "matched" &&
+                                "text-emerald-700 dark:text-emerald-300",
                               tok.type === "added" &&
-                                "mx-0.5 rounded bg-rose-100 px-1 text-rose-700 line-through dark:bg-rose-950 dark:text-rose-300",
+                                "rounded bg-rose-100 px-1 text-rose-700 line-through",
                               tok.type === "removed" &&
-                                "mx-0.5 rounded bg-amber-100 px-1 font-semibold text-amber-800 underline decoration-amber-500 dark:bg-amber-950 dark:text-amber-200"
+                                "rounded bg-amber-100 px-1 font-semibold text-amber-800"
                             )}
                           >
                             {tok.value}
                           </span>
                         ))}
-                      </div>
+                      </p>
                     </div>
-                  </div>
-                  {grading.status === "mastered" && (
-                    <LottieCelebration comboStreak={comboStreak} />
                   )}
+                </div>
+
+                {isSentenceCompleted && (
+                  <div
+                    data-testid="transcript-box"
+                    className="space-y-2 rounded-xl border border-[#2463eb]/20 bg-[#eff6ff]/60 p-4"
+                  >
+                    <TranscriptAnnotator
+                      text={question.transcript}
+                      question={question}
+                      onSavedVocab={onDataChanged}
+                    />
+                    <p className="text-sm text-[#1d4ed8]">
+                      <strong>Dịch nghĩa:</strong> {question.transcriptVi}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MODE 3: NGHE FULL — Full Transcript & Clickable Words */}
+            {mode === "full" && (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl bg-slate-50/85 p-4 dark:bg-slate-950/80">
+                  <div className="flex flex-wrap gap-1.5 text-base leading-relaxed">
+                    {question.transcript.split(/\s+/).map((raw, i) => {
+                      const clean = raw.replace(/^[^a-zA-Z0-9'-]+|[^a-zA-Z0-9'-]+$/g, "");
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => clean && setDrawerWord(clean)}
+                          className="cursor-pointer rounded-md px-1 py-0.5 font-medium text-slate-800 transition-colors hover:bg-[#eff6ff] hover:text-[#2463eb] dark:text-slate-100"
+                        >
+                          {raw}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {question.dialogue && question.dialogue.length > 0 && (
+                  <div className="space-y-1.5 rounded-xl border border-[#e1e7ef] bg-white p-3.5 text-sm dark:border-slate-800 dark:bg-slate-950">
+                    {question.dialogue.map((d, i) => (
+                      <p key={i} className="text-slate-700 dark:text-slate-300">
+                        <strong className="text-[#2463eb]">{d.speaker}: </strong>
+                        {d.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-[#2463eb]/25 bg-[#eff6ff]/70 px-4 py-3 text-sm text-[#1d4ed8] dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+                  <p className="font-semibold">Dịch nghĩa:</p>
+                  <p className="mt-0.5">{question.transcriptVi}</p>
                 </div>
               </div>
             )}
           </div>
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              type="button"
-              onClick={onCheckDictation}
-              data-testid="check-dictation-button"
-              className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-              {grading?.status === "mastered" ? "Sang câu tiếp theo (Enter)" : "Kiểm tra đáp án"}
-            </button>
-            <button
-              type="button"
-              onClick={onHintNextWord}
-              data-testid="hint-next-word-button"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
-            >
-              <MagicWand size={15} weight="duotone" />
-              <span>Gợi ý từ</span>
-            </button>
-            <button
-              type="button"
-              onClick={onNext}
-              className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Bỏ qua
-            </button>
-          </div>
         </div>
-      )}
 
-      {mode === "check" && (
-        <div className="space-y-4">
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-            Nghe và chọn phương án đúng nhất:
-          </p>
-          <div className="space-y-2">
-            {(question.choices ?? [question.transcript]).map((choice, idx) => {
-              const isSelected = selectedChoice === idx;
-              const isCorrect = idx === (question.correctChoiceIndex ?? 0);
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    if (!choiceChecked) setSelectedChoice(idx);
-                  }}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-                    choiceChecked && isCorrect
-                      ? "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
-                      : choiceChecked && isSelected && !isCorrect
-                      ? "border-rose-400 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
-                      : isSelected
-                      ? "border-blue-600 bg-blue-50/70 text-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
-                      : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60"
-                  )}
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-current font-mono text-xs font-bold">
-                    {String.fromCharCode(65 + idx)}
-                  </span>
-                  <span>{choice}</span>
-                </button>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            onClick={choiceChecked ? onNext : onCheckMultipleChoice}
-            disabled={selectedChoice === null}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {choiceChecked ? "Câu tiếp theo" : "Xác nhận đáp án"}
-          </button>
-        </div>
-      )}
-
-      {mode === "cloze" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-              Điền các từ khóa bị ẩn (phù hợp người mới bắt đầu):
-            </p>
-            {clozeResult && (
-              <span className="font-mono text-sm font-bold text-blue-600 tabular-nums">
-                {clozeResult.correctCount}/{clozeResult.totalBlanks} đúng ({clozeResult.accuracy}%)
-              </span>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-base leading-loose dark:border-slate-800 dark:bg-slate-950/60">
-            {clozeSegments.map((seg) =>
-              seg.isBlank ? (
-                <span key={seg.id} className="mx-1 inline-flex items-center">
-                  {seg.leadingPunctuation}
-                  <input
-                    value={clozeAnswers[seg.id] ?? ""}
-                    onChange={(e) =>
-                      setClozeAnswers((prev) => ({ ...prev, [seg.id]: e.target.value }))
-                    }
-                    style={{ width: `${Math.max(seg.text.length + 2, 7)}ch` }}
-                    placeholder={"_".repeat(Math.min(seg.text.length, 6))}
-                    className={cn(
-                      "rounded border-b-2 bg-white px-1.5 py-0.5 text-center font-mono text-sm outline-none dark:bg-slate-900",
-                      clozeResult
-                        ? clozeResult.results[seg.id]
-                          ? "border-emerald-500 text-emerald-700"
-                          : "border-rose-500 text-rose-700"
-                        : "border-blue-400 focus:border-blue-600"
-                    )}
-                  />
-                  {seg.trailingPunctuation}
-                </span>
-              ) : (
-                <span key={seg.id} className="mx-0.5">
-                  {seg.leadingPunctuation}
-                  {seg.text}
-                  {seg.trailingPunctuation}
-                </span>
-              )
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              if (clozeResult && clozeResult.accuracy >= 80) {
-                onNext();
-              } else {
-                onCheckCloze();
-              }
-            }}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            {clozeResult ? "Sang câu tiếp theo" : "Kiểm tra từ điền"}
-          </button>
-        </div>
-      )}
-
-      {mode === "full" && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300">
-          <p className="font-semibold text-slate-900 dark:text-slate-100">
-            Chế độ Nghe Full + Nhại theo (Shadowing)
-          </p>
-          <p className="mt-1">
-            Nghe liền mạch transcript ở cột bên phải, bấm trực tiếp vào bất kỳ từ nào trong câu để tra nghĩa và lưu vào Giỏ từ vựng.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface RightInspectorPaneProps {
-  question: ListeningQuestion;
-  showTranscript: boolean;
-  onToggleTranscript: () => void;
-  questionHistory: DictationAttempt[];
-  onSaveVocab: (item: ListeningQuestion["keyVocab"][number]) => void;
-  onDataChanged: () => void;
-}
-
-function RightInspectorPane({
-  question,
-  showTranscript,
-  onToggleTranscript,
-  questionHistory,
-  onSaveVocab,
-  onDataChanged,
-}: RightInspectorPaneProps) {
-  return (
-    <div className="flex h-full flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
-        <div>
-          <h3 className="font-display text-sm font-bold text-slate-900 dark:text-slate-100">
-            Transcript &amp; Tra từ nhanh
-          </h3>
-          <p className="text-[11px] text-slate-400">
-            Bấm trực tiếp vào bất kỳ từ nào để tra nghĩa &amp; lưu
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleTranscript}
-          data-testid="toggle-transcript-button"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+        {/* RIGHT COLUMN: "Từ vựng nên học" Card matching Screenshots 1 & 2 */}
+        <aside
+          data-testid="vocab-to-learn-panel"
+          className="rounded-2xl border border-[#e1e7ef] bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900"
         >
-          {showTranscript ? <EyeSlash size={14} /> : <Eye size={14} />}
-          <span>{showTranscript ? "Ẩn đáp án" : "Xem đáp án"}</span>
-        </button>
-      </div>
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-800">
+            <BookOpen className="h-4 w-4 text-[#2463eb]" />
+            <h3 className="font-display text-base font-bold text-slate-900 dark:text-slate-50">
+              Từ vựng nên học
+            </h3>
+          </div>
 
-      {showTranscript ? (
-        <div
-          data-testid="transcript-box"
-          className="space-y-3 rounded-lg bg-slate-50 p-4 dark:bg-slate-950"
-        >
-          {question.dialogue && question.dialogue.length > 0 ? (
-            <div className="space-y-2 text-sm leading-relaxed">
-              {question.dialogue.map((line, i) => (
-                <p key={i} className="text-slate-900 dark:text-slate-100">
-                  <span className="font-semibold text-blue-600 dark:text-blue-400">
-                    {line.speaker}:{" "}
-                  </span>
-                  <TranscriptAnnotator
-                    text={line.text}
-                    question={question}
-                    onSavedVocab={onDataChanged}
-                  />
-                </p>
-              ))}
+          {!isSentenceCompleted ? (
+            <div
+              data-testid="vocab-locked-state"
+              className="flex min-h-[260px] flex-col items-center justify-center px-4 py-10 text-center"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <Lock className="h-5 w-5" />
+              </div>
+              <p className="mt-4 text-sm font-bold text-slate-900 dark:text-slate-100">
+                Chép xong câu để xem {question.keyVocab.length} từ nên học
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                Từ vựng nằm ngay trong câu, hiện sớm sẽ lộ đáp án.
+              </p>
             </div>
           ) : (
-            <p className="text-sm font-medium leading-relaxed text-slate-900 dark:text-slate-100">
-              <TranscriptAnnotator
-                text={question.transcript}
-                question={question}
-                onSavedVocab={onDataChanged}
-              />
-            </p>
-          )}
-          <p className="border-t border-slate-200 pt-2.5 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-400">
-            {question.transcriptVi}
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-500 dark:border-slate-800">
-          Transcript đang được ẩn để bạn tự nghe chép. Sẽ tự mở khi gõ đạt hoặc bấm &ldquo;Xem đáp án&rdquo;.
-        </div>
-      )}
+            <div data-testid="vocab-unlocked-state" className="mt-4 space-y-3">
+              {/* Sub-header: "N từ | Chi tiết | + Thêm tất cả (N)" */}
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
+                <span className="text-sm font-semibold text-slate-600 tabular-nums">
+                  {question.keyVocab.length} từ
+                </span>
 
-      <Accordion.Root type="multiple" defaultValue={["tip"]} className="space-y-2">
-        <Accordion.Item
-          value="tip"
-          className="rounded-lg border border-slate-200 dark:border-slate-800"
-        >
-          <Accordion.Header>
-            <Accordion.Trigger className="flex w-full items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800/50">
-              <span className="flex items-center gap-2">
-                <Lightbulb size={15} weight="duotone" className="text-amber-600" />
-                Mẹo nối âm &amp; Ngữ pháp trọng tâm
-              </span>
-              <CaretDown size={14} />
-            </Accordion.Trigger>
-          </Accordion.Header>
-          <Accordion.Content className="space-y-2 border-t border-slate-100 px-3.5 py-3 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:text-slate-400">
-            <p>
-              <strong className="text-slate-800 dark:text-slate-200">Nối âm:</strong>{" "}
-              {question.linkedSpeechTip}
-            </p>
-            <p>
-              <strong className="text-slate-800 dark:text-slate-200">Ngữ pháp:</strong>{" "}
-              {question.grammarNote}
-            </p>
-          </Accordion.Content>
-        </Accordion.Item>
-      </Accordion.Root>
+                <div className="flex items-center gap-2">
+                  {question.keyVocab[0] && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawerWord(question.keyVocab[0].word)}
+                      data-testid="vocab-details-button"
+                      className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-200/70 dark:text-slate-200"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>Chi tiết</span>
+                    </button>
+                  )}
 
-      {question.keyVocab.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-            Từ vựng trong câu (Bấm lưu vào Giỏ từ vựng)
-          </h4>
-          <div className="space-y-2">
-            {question.keyVocab.map((v, i) => (
-              <div
-                key={i}
-                className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-2.5 text-xs dark:border-slate-800"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-900 dark:text-slate-100">
-                      {v.word}
-                    </span>
-                    <span className="font-mono text-slate-400">{v.phonetic}</span>
-                  </div>
-                  <p className="mt-0.5 text-slate-600 dark:text-slate-400">
-                    {v.meaningVi}
-                  </p>
+                  <button
+                    type="button"
+                    onClick={handleAddAllVocab}
+                    data-testid="add-all-vocab-button"
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-[#2463eb] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#1d4ed8]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Thêm tất cả ({question.keyVocab.length})</span>
+                  </button>
                 </div>
+              </div>
+
+              {/* Vocabulary Cards List */}
+              <div className="space-y-2.5">
+                {question.keyVocab.map((v) => {
+                  const meta = getOfflineWordBadge(v, cefrLevel);
+                  const saved = savedWordsSet.has(v.word.toLowerCase());
+                  return (
+                    <div
+                      key={v.word}
+                      className="rounded-xl border border-[#e1e7ef] bg-white p-3.5 transition-colors hover:border-[#2463eb]/35 dark:border-slate-800 dark:bg-slate-950"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setDrawerWord(v.word)}
+                              className="cursor-pointer font-display text-base font-bold text-slate-900 hover:text-[#2463eb] dark:text-slate-50"
+                            >
+                              {v.word}
+                            </button>
+                            <span className="text-xs italic text-slate-500">
+                              {meta.posShort}
+                            </span>
+                            <span className="rounded bg-[#eff6ff] px-1.5 py-0.5 text-[11px] font-bold text-[#2463eb] dark:bg-blue-950/70 dark:text-blue-300">
+                              {meta.cefr}
+                            </span>
+                          </div>
+
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                            <span className="font-mono">{v.phonetic}</span>
+                            <button
+                              type="button"
+                              onClick={() => playWordPronunciation(v.word, "US")}
+                              aria-label={`Nghe phát âm ${v.word}`}
+                              className="cursor-pointer rounded p-0.5 text-[#2463eb] hover:bg-[#eff6ff]"
+                            >
+                              <Volume2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+
+                          <p className="mt-1.5 text-sm text-slate-700 dark:text-slate-300">
+                            {v.meaningVi}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setDrawerWord(v.word)}
+                            title="Mở chi tiết & Flashcard từ này"
+                            aria-label={`Xem chi tiết ${v.word}`}
+                            className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                          >
+                            <Flag className="h-3.5 w-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddSingleVocab(v)}
+                            className={cn(
+                              "inline-flex cursor-pointer items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors",
+                              saved
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                : "bg-[#eff6ff] text-[#2463eb] hover:bg-[#dbeafe] dark:bg-blue-950/60 dark:text-blue-300"
+                            )}
+                          >
+                            {saved ? (
+                              <>
+                                <Check className="h-3.5 w-3.5" />
+                                <span>Đã thêm</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>Thêm</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      {/* 3. Persistent Bottom Bar matching Screenshots 1 & 2 */}
+      <div
+        data-testid="studio-bottom-bar"
+        className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-[#e1e7ef] bg-white/95 px-4 py-3 backdrop-blur-xs dark:border-slate-800 dark:bg-slate-900/95"
+      >
+        {/* Left: Báo lỗi + Giỏ từ */}
+        <div className="flex items-center gap-2">
+          <Popover.Root open={reportPopoverOpen} onOpenChange={setReportPopoverOpen}>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                data-testid="report-error-button"
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e1e7ef] bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                <Flag className="h-4 w-4 text-slate-500" />
+                <span>Báo lỗi</span>
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="z-50 w-72 rounded-xl border border-[#e1e7ef] bg-white p-4 shadow-xl dark:border-slate-800 dark:bg-slate-900"
+              >
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Báo lỗi câu nghe #{currentIndex + 1}
+                </p>
+                <textarea
+                  rows={2}
+                  value={reportNote}
+                  onChange={(e) => setReportNote(e.target.value)}
+                  placeholder="Mô tả lỗi audio, chính tả hoặc nghĩa..."
+                  className="mt-2 w-full rounded-lg border border-[#e1e7ef] p-2 text-xs outline-none focus:border-[#2463eb] dark:border-slate-700 dark:bg-slate-950"
+                />
+                <div className="mt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prev = JSON.parse(
+                        localStorage.getItem("duc_english_reports") || "[]"
+                      );
+                      prev.push({
+                        questionId: question.id,
+                        note: reportNote.trim() || "Cần rà soát lại nội dung câu",
+                        createdAt: Date.now(),
+                      });
+                      localStorage.setItem(
+                        "duc_english_reports",
+                        JSON.stringify(prev)
+                      );
+                      setReportNote("");
+                      setReportPopoverOpen(false);
+                      toast.success("Cảm ơn bạn! Đã ghi nhận phản hồi câu này.");
+                    }}
+                    className="cursor-pointer rounded-lg bg-[#2463eb] px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Gửi báo lỗi
+                  </button>
+                </div>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+
+          <button
+            type="button"
+            onClick={() => setBasketOpen(true)}
+            data-testid="vocab-basket-button"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-[#e1e7ef] bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <ShoppingBasket className="h-4 w-4 text-[#2463eb]" />
+            <span>Giỏ từ</span>
+            {vocabList.length > 0 && (
+              <span className="rounded-full bg-[#eff6ff] px-1.5 py-0.5 font-mono text-xs font-semibold text-[#2463eb] tabular-nums">
+                {vocabList.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Center: Shortcut Hints */}
+        <p className="hidden text-xs font-medium text-slate-500 md:block">
+          Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu
+        </p>
+
+        {/* Right: Question Switcher 1/N */}
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              data-testid="question-switcher-button"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl bg-[#2463eb] px-3.5 py-1.5 font-mono text-sm font-semibold text-white tabular-nums shadow-xs hover:bg-[#1d4ed8]"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span>
+                {currentIndex + 1}/{questions.length}
+              </span>
+            </button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content
+              side="top"
+              align="end"
+              sideOffset={8}
+              className="z-50 w-64 rounded-xl border border-[#e1e7ef] bg-white p-3.5 shadow-xl dark:border-slate-800 dark:bg-slate-900"
+            >
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                Chọn nhanh câu ({questions.length} câu · {TOPIC_LABELS[question.topic]})
+              </p>
+              <div className="mt-2.5 grid grid-cols-4 gap-1.5">
+                {questions.map((q, idx) => {
+                  const active = idx === currentIndex;
+                  const mastered =
+                    checkCompletedIds.has(q.id) ||
+                    (bestAccuracyMap.get(q.id) ?? 0) >= 80;
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      className={cn(
+                        "h-9 cursor-pointer rounded-lg font-mono text-xs font-semibold transition-colors",
+                        active
+                          ? "bg-[#2463eb] text-white"
+                          : mastered
+                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                      )}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
+
+      {/* Right-Side Word Definition & 3D Flip Flashcard Drawer (Screenshot 3) */}
+      <WordDetailDrawer
+        word={drawerWord}
+        question={question}
+        contextTitle={title}
+        fallbackCefr={cefrLevel}
+        savedWordsSet={savedWordsSet}
+        onSelectWord={(nextW) => setDrawerWord(nextW)}
+        onClose={() => setDrawerWord(null)}
+        onSavedVocab={onDataChanged}
+      />
+
+      {/* Giỏ từ (Saved Vocab Basket) Slide-over Modal */}
+      <Dialog.Root open={basketOpen} onOpenChange={setBasketOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-[1px]" />
+          <Dialog.Content
+            data-testid="vocab-basket-drawer"
+            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[#e1e7ef] bg-white p-5 shadow-2xl outline-none dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <Dialog.Title className="flex items-center gap-2 font-display text-lg font-bold text-slate-900 dark:text-slate-50">
+                <ShoppingBasket className="h-5 w-5 text-[#2463eb]" />
+                <span>Giỏ từ vựng ({vocabList.length})</span>
+              </Dialog.Title>
+              <Dialog.Close asChild>
                 <button
                   type="button"
-                  onClick={() => onSaveVocab(v)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-50 dark:border-slate-700 dark:text-blue-400 dark:hover:bg-blue-950/60"
+                  aria-label="Đóng giỏ từ"
+                  className="cursor-pointer rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <BookmarkSimple size={13} />
-                  <span>Lưu từ</span>
+                  <X className="h-5 w-5" />
                 </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+              </Dialog.Close>
+            </div>
 
-      {questionHistory.length > 0 && (
-        <div className="mt-auto border-t border-slate-100 pt-3 dark:border-slate-800">
-          <h4 className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-            Lịch sử các lần gõ gần đây
-          </h4>
-          <div className="mt-2 space-y-1.5">
-            {questionHistory.map((att, idx) => (
-              <div
-                key={att.id ?? idx}
-                className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400"
-              >
-                <span className="max-w-[75%] truncate">{att.userText || "(Trống)"}</span>
-                <span
-                  className={cn(
-                    "font-mono font-semibold tabular-nums",
-                    att.accuracy >= 95
-                      ? "text-emerald-600"
-                      : att.accuracy >= 70
-                      ? "text-amber-600"
-                      : "text-rose-600"
-                  )}
-                >
-                  {att.accuracy}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+            <div className="mt-4 flex-1 space-y-2.5 overflow-y-auto">
+              {vocabList.length === 0 ? (
+                <p className="py-12 text-center text-sm text-slate-500">
+                  Giỏ từ chưa có từ nào. Hoàn thành câu nghe rồi bấm + Thêm để lưu nhé!
+                </p>
+              ) : (
+                vocabList.map((item) => (
+                  <div
+                    key={item.id ?? item.word}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-[#e1e7ef] p-3 dark:border-slate-800"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-display font-bold text-slate-900 dark:text-slate-100">
+                          {item.word}
+                        </span>
+                        <span className="font-mono text-xs text-slate-500">
+                          {item.phonetic}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-slate-600 dark:text-slate-400">
+                        {item.meaningVi}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => playWordPronunciation(item.word, "US")}
+                        aria-label={`Phát âm ${item.word}`}
+                        className="cursor-pointer rounded-lg p-1.5 text-[#2463eb] hover:bg-[#eff6ff]"
+                      >
+                        <Volume2 className="h-4 w-4" />
+                      </button>
+                      {item.id && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await db.vocab.delete(item.id!);
+                            onDataChanged();
+                          }}
+                          aria-label={`Xóa ${item.word}`}
+                          className="cursor-pointer rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

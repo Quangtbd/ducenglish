@@ -56,26 +56,15 @@ export function TranscriptAnnotator({
     setLoading(true);
     setLookupData(null);
     try {
-      const res = await fetch("/api/word-lookup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word: clean,
-          contextSentence: question.transcript,
-        }),
+      const { lookupWordDetails } = await import("../lib/dictionaryService");
+      const data = await lookupWordDetails(clean, question);
+      setLookupData({
+        word: data.word,
+        phonetic: data.phoneticUs,
+        partOfSpeech: data.partOfSpeech,
+        meaningVi: data.meaningVi,
+        exampleSentence: data.exampleSentence,
       });
-      if (res.ok) {
-        const data = (await res.json()) as LookupResult;
-        setLookupData(data);
-      } else {
-        setLookupData({
-          word: clean,
-          phonetic: "/.../",
-          partOfSpeech: "word",
-          meaningVi: "Từ xuất hiện trong bài nghe (bấm lưu để tự ghi chú thêm).",
-          exampleSentence: question.transcript,
-        });
-      }
     } catch {
       setLookupData({
         word: clean,

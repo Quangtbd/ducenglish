@@ -11,20 +11,7 @@ export type MainSection =
 
 export type CefrLevel = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
-export type TestCollectionId =
-  | "all"
-  | "crack-vol-1"
-  | "crack-vol-2"
-  | "2026"
-  | "2025"
-  | "2024"
-  | "2023"
-  | "2022"
-  | "2021"
-  | "2020"
-  | "2019"
-  | "thematic"
-  | "custom";
+export type TestCollectionId = "all" | "thematic";
 
 export type ToeicPart = 1 | 2 | 3 | 4;
 
@@ -52,6 +39,23 @@ export interface VocabHighlight {
   partOfSpeech: string;
   meaningVi: string;
   exampleSentence: string;
+  cefr?: CefrLevel;
+  definitionEn?: string;
+  collocations?: { phrase: string; meaningVi: string }[];
+  synonyms?: { word: string; meaningVi: string }[];
+}
+
+export interface WordBlankToken {
+  id: string;
+  raw: string;
+  cleanWord: string;
+  leadingPunctuation: string;
+  trailingPunctuation: string;
+  isWord: boolean;
+  isBlank: boolean;
+  revealed: boolean;
+  userInput: string;
+  status: "idle" | "correct" | "revealed" | "wrong";
 }
 
 export interface ListeningQuestion {
@@ -78,7 +82,7 @@ export interface TestSet {
   id: string;
   testNumber: number; // 1..10
   title: string;
-  collection: Exclude<TestCollectionId, "all">;
+  collection: string;
   collectionLabel: string;
   levelRange: string;
   minLevel: number;

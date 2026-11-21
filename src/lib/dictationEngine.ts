@@ -272,3 +272,145 @@ export function computeXpForAttempt(accuracy: number, comboStreak: number): numb
   return base + bonus;
 }
 
+const STOPWORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "am",
+  "in",
+  "on",
+  "at",
+  "to",
+  "of",
+  "for",
+  "with",
+  "by",
+  "from",
+  "and",
+  "or",
+  "but",
+  "some",
+  "any",
+  "this",
+  "that",
+  "these",
+  "those",
+  "it",
+  "he",
+  "she",
+  "we",
+  "they",
+  "you",
+  "i",
+  "my",
+  "your",
+  "his",
+  "her",
+  "our",
+  "their",
+  "there",
+  "here",
+  "will",
+  "would",
+  "can",
+  "could",
+  "has",
+  "have",
+  "had",
+  "do",
+  "does",
+  "did",
+]);
+
+export function tokenizeSentenceForCheck(
+  transcript: string,
+  density: 30 | 50 | 100 = 50,
+  priorityVocabWords: string[] = []
+): import("../types/toeic").WordBlankToken[] {
+  const rawTokens = transcript.trim().split(/\s+/).filter(Boolean);
+  if (rawTokens.length === 0) return [];
+
+  const prioritySet = new Set(
+    priorityVocabWords
+      .flatMap((w) => w.toLowerCase().split(/\s+/))
+      .map((w) => w.replace(/[^a-z0-9'-]/gi, ""))
+      .filter(Boolean)
+  );
+
+  const parsed = rawTokens.map((raw, idx) => {
+    const leadingPunctuation = raw.match(/^[^a-zA-Z0-9]+/)?.[0] ?? "";
+    const trailingPunctuation = raw.match(/[^a-zA-Z0-9]+$/)?.[0] ?? "";
+    const cleanWord = raw
+      .slice(leadingPunctuation.length, raw.length - trailingPunctuation.length)
+      .trim();
+    const lower = cleanWord.toLowerCase();
+    const isWord = /[a-zA-Z0-9]/.test(cleanWord);
+
+    let score = 0;
+    if (isWord) {
+      if (prioritySet.has(lower)) score += 100;
+      if (!STOPWORDS.has(lower)) score += 40;
+      score += Math.min(20, cleanWord.length * 2);
+      // Slight deterministic tiebreaker favoring alternating positions
+      if (idx % 2 === 1) score += 3;
+    }
+
+    return {
+      id: `tok-${idx}`,
+      raw,
+      cleanWord,
+      leadingPunctuation,
+      trailingPunctuation,
+      isWord,
+      score,
+      idx,
+    };
+  });
+
+  const wordTokens = parsed.filter((t) => t.isWord);
+  const blankSet = new Set<number>();
+
+  if (density === 100) {
+    wordTokens.forEach((t) => blankSet.add(t.idx));
+  } else {
+    const targetBlankCount = Math.max(
+      1,
+      Math.min(wordTokens.length, Math.round(wordTokens.length * (density / 100)))
+    );
+    const ranked = [...wordTokens].sort((a, b) => b.score - a.score || a.idx - b.idx);
+    for (let i = 0; i < targetBlankCount && i < ranked.length; i += 1) {
+      blankSet.add(ranked[i].idx);
+    }
+  }
+
+  return parsed.map((t) => ({
+    id: t.id,
+    raw: t.raw,
+    cleanWord: t.cleanWord,
+    leadingPunctuation: t.leadingPunctuation,
+    trailingPunctuation: t.trailingPunctuation,
+    isWord: t.isWord,
+    isBlank: blankSet.has(t.idx),
+    revealed: false,
+    userInput: "",
+    status: "idle",
+  }));
+}
+
+export function isBlankTokenMatch(userInput: string, targetWord: string): boolean {
+  const cleanUser = userInput
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9']/g, "");
+  const cleanTarget = targetWord
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9']/g, "");
+  return Boolean(cleanUser && cleanTarget && cleanUser === cleanTarget);
+}
