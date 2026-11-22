@@ -11,6 +11,7 @@ import {
 import { MOCK_TEST_EXAMS } from "../data/toeicDataset";
 import { speakWithBrowserFallback } from "../lib/audioService";
 import { cn, formatDuration } from "../lib/utils";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
 
 export function MockTestModule() {
   const [examId, setExamId] = useState(MOCK_TEST_EXAMS[0].id);
@@ -72,32 +73,30 @@ export function MockTestModule() {
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+      <ModuleHeroBanner
+        kicker="Thi thử TOEIC Online"
+        titleLeading="Đo lường năng lực"
+        titleHighlight="chuẩn xác như thi thật"
+        titleTrailing="tại IIG"
+        description="Đầy đủ các định dạng Mini Test, Full Test và bài thi rút gọn, bấm giờ thời gian thực và phân tích điểm số từng Part."
+        icon={Exam}
+        pills={MOCK_TEST_EXAMS.map((ex) => ({
+          id: ex.id,
+          label: `${ex.type} (${ex.questionsCount} câu)`,
+        }))}
+        activePill={examId}
+        onSelectPill={(id) => setExamId(id)}
+        searchPlaceholder="Tìm kiếm mã đề thi thử hoặc năm xuất bản..."
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-            <Exam size={16} weight="duotone" />
-            <span>Thi Thử TOEIC · {exam.type}</span>
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
+          <h2 className="font-display text-xl font-bold text-slate-900 dark:text-slate-50">
             {exam.title}
-          </h1>
-          <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950">
-            {MOCK_TEST_EXAMS.map((ex) => (
-              <button
-                key={ex.id}
-                type="button"
-                onClick={() => setExamId(ex.id)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                  examId === ex.id
-                    ? "bg-white text-blue-600 shadow-xs dark:bg-slate-800 dark:text-blue-400"
-                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
-                )}
-              >
-                {ex.type} ({ex.questionsCount} câu)
-              </button>
-            ))}
-          </div>
+          </h2>
+          <p className="text-xs text-slate-500">
+            Thời lượng: {exam.durationMinutes} phút · Số câu: {exam.questionsCount}
+          </p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -125,7 +124,7 @@ export function MockTestModule() {
             </button>
           )}
         </div>
-      </section>
+      </div>
 
       {submitted && (
         <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">

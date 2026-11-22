@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -539,15 +540,24 @@ export function DictationStudio({
     >
       {/* 1. Top Studio Bar matching Screenshots 1 & 2 */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 pb-3 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={onExit}
-          data-testid="exit-studio-button"
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span>Thoát</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onExit}
+            data-testid="exit-studio-button"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Thoát</span>
+          </button>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-blue-100 bg-white shadow-2xs dark:border-slate-800 dark:bg-slate-900">
+            <img
+              src="/assets/aistudio/0f777f68-388b-4e0b-a765-466be82c8642_6c463418.jfif"
+              alt="Owl Avatar"
+              className="h-full w-full object-contain p-0.5"
+            />
+          </span>
+        </div>
 
         {/* Center Segmented Mode Tabs: Nghe chép | Nghe check | Nghe full */}
         <div
@@ -729,6 +739,24 @@ export function DictationStudio({
             {/* MODE 1 (DEFAULT): NGHE CHECK — Inline Fill-in-the-Blank Slots */}
             {mode === "check" && (
               <div className="mt-4 space-y-4">
+                {question.dialogue && question.dialogue.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-100 bg-[#eff6ff]/60 px-3.5 py-2 text-xs dark:border-blue-900/40 dark:bg-blue-950/40">
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">
+                      Hội thoại đối đáp:
+                    </span>
+                    {Array.from(
+                      new Set(question.dialogue.map((d) => d.speaker))
+                    ).map((spk) => (
+                      <span
+                        key={spk}
+                        className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white/80 px-2.5 py-0.5 text-xs font-semibold text-[#1d4ed8] shadow-xs dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300"
+                      >
+                        <Users className="h-3 w-3 text-[#2463eb]" />
+                        <span>{spk}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <motion.div
                   key={shakeKey}
                   animate={shakeKey > 0 ? { x: [0, -5, 5, -3, 3, 0] } : undefined}

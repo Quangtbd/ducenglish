@@ -79,8 +79,12 @@ export function TopNav({
           data-testid="brand-logo-button"
           className="flex shrink-0 items-center gap-2 whitespace-nowrap font-display text-xl font-bold tracking-tight text-[#2463eb] transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#2463eb] dark:text-blue-400"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#2463eb] to-blue-500 text-white shadow-xs">
-            <Headphones size={20} weight="duotone" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-blue-100 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <img
+              src="/assets/aistudio/0f777f68-388b-4e0b-a765-466be82c8642_6c463418.jfif"
+              alt="Duc English Logo"
+              className="h-full w-full object-contain p-0.5"
+            />
           </span>
           <span className="hidden sm:inline">Duc English</span>
         </button>

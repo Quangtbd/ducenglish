@@ -9,6 +9,7 @@ import {
 import { COURSE_ROADMAPS } from "../data/toeicDataset";
 import type { MainSection } from "../types/toeic";
 import { cn } from "../lib/utils";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
 
 interface CourseModuleProps {
   onNavigateSection: (section: MainSection) => void;
@@ -35,18 +36,21 @@ export function CourseModule({ onNavigateSection }: CourseModuleProps) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-          <GraduationCap size={16} weight="duotone" />
-          <span>Lộ Trình Học &amp; Phương Pháp Chuẩn Duc English</span>
-        </div>
-        <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
-          Khóa Học Tự Luyện Theo Mục Tiêu Điểm
-        </h1>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          Bấm đánh dấu hoàn thành từng chặng bài học để theo dõi % tiến độ lộ trình nghe chép và 4 kỹ năng.
-        </p>
-      </section>
+      <ModuleHeroBanner
+        kicker="Khóa học TOEIC bài bản"
+        titleLeading="Chinh phục mục tiêu"
+        titleHighlight="theo lộ trình cá nhân hóa"
+        titleTrailing="hiệu quả"
+        description="Lộ trình tự luyện 4 kỹ năng từ cơ bản đến nâng cao, bám sát các chặng bài học và phương pháp luyện phản xạ hiệu quả."
+        icon={GraduationCap}
+        pills={[
+          { id: "all", label: "Tất cả khóa học" },
+          { id: "express", label: "Khóa cấp tốc" },
+          { id: "advanced", label: "Chuyên sâu 4 kỹ năng" },
+        ]}
+        activePill="all"
+        searchPlaceholder="Tìm kiếm chặng bài giảng hoặc tài liệu hướng dẫn..."
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {COURSE_ROADMAPS.map((course) => {

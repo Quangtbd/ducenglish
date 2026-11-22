@@ -1,274 +1,399 @@
 import { useMemo, useState } from "react";
 import {
   BookOpenText,
-  CheckCircle,
-  Fire,
-  Highlighter,
-  WarningCircle,
+  ShoppingBag,
+  Copy,
+  ArrowClockwise,
+  Trash,
+  Shuffle,
+  LightbulbFilament,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
+import { GRAMMAR_TOPICS, type GrammarTopic } from "../data/readingGrammarDataset";
+import { ReadingPracticeStudio } from "./ReadingPracticeStudio";
 import { READING_QUESTIONS } from "../data/toeicDataset";
+import { WordDetailDrawer } from "./WordDetailDrawer";
 import { cn } from "../lib/utils";
 
-function renderPassageWithEvidence(
-  text: string,
-  evidenceSnippet?: string,
-  highlight?: boolean
-) {
-  if (!highlight || !evidenceSnippet) return text;
-  const idx = text.indexOf(evidenceSnippet);
-  if (idx === -1) return text;
-  const before = text.slice(0, idx);
-  const after = text.slice(idx + evidenceSnippet.length);
-  return (
-    <>
-      {before}
-      <mark className="rounded bg-amber-200/80 px-1 py-0.5 text-slate-900 dark:bg-amber-500/30 dark:text-amber-100">
-        {evidenceSnippet}
-      </mark>
-      {after}
-    </>
-  );
-}
+type ReadingTab = "grammar" | 5 | 6 | 7;
+type GrammarCategoryFilter = "all" | "Từ loại" | "Động từ" | "Ngữ pháp khác";
+
+const READING_TABS: { id: ReadingTab; label: string }[] = [
+  { id: "grammar", label: "Ngữ pháp" },
+  { id: 5, label: "Part 5" },
+  { id: 6, label: "Part 6" },
+  { id: 7, label: "Part 7" },
+];
+
+const GRAMMAR_CATEGORY_FILTERS: { id: GrammarCategoryFilter; label: string }[] = [
+  { id: "all", label: "Tất cả" },
+  { id: "Từ loại", label: "Từ loại" },
+  { id: "Động từ", label: "Động từ" },
+  { id: "Ngữ pháp khác", label: "Ngữ pháp khác" },
+];
 
 export function ReadingModule() {
-  const [partFilter, setPartFilter] = useState<"all" | 5 | 6 | 7>("all");
-  const [onlyWrongFilter, setOnlyWrongFilter] = useState(false);
-  const [selectedMap, setSelectedMap] = useState<Record<string, number>>({});
-  const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
-  const [wrongIds, setWrongIds] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem("duc_english_reading_wrong");
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [activeTab, setActiveTab] = useState<ReadingTab>("grammar");
+  const [grammarCategory, setGrammarCategory] = useState<GrammarCategoryFilter>("all");
+  const [searchKeyword, setSearchKeyword] = useState<string>("");
+  const [activePracticeTopic, setActivePracticeTopic] = useState<GrammarTopic | null>(null);
+  const [drawerWord, setDrawerWord] = useState<string | null>(null);
 
-  const items = useMemo(
-    () =>
-      READING_QUESTIONS.filter((q) => {
-        if (partFilter !== "all" && q.part !== partFilter) return false;
-        if (onlyWrongFilter && !wrongIds.includes(q.id)) return false;
-        return true;
-      }),
-    [partFilter, onlyWrongFilter, wrongIds]
-  );
-
-  const correctTotal = READING_QUESTIONS.filter(
-    (q) => checkedMap[q.id] && selectedMap[q.id] === q.correctIndex
-  ).length;
-
-  const handleCheckQuestion = (questionId: string, isRight: boolean) => {
-    setCheckedMap((prev) => ({ ...prev, [questionId]: true }));
-    setWrongIds((prev) => {
-      const next = isRight
-        ? prev.filter((id) => id !== questionId)
-        : Array.from(new Set([...prev, questionId]));
-      localStorage.setItem("duc_english_reading_wrong", JSON.stringify(next));
-      return next;
+  // Filtered grammar topics
+  const filteredGrammarTopics = useMemo(() => {
+    return GRAMMAR_TOPICS.filter((t) => {
+      if (grammarCategory !== "all" && t.category !== grammarCategory) return false;
+      if (
+        searchKeyword.trim() &&
+        !t.title.toLowerCase().includes(searchKeyword.toLowerCase().trim())
+      ) {
+        return false;
+      }
+      return true;
     });
+  }, [grammarCategory, searchKeyword]);
+
+  // Group topics by category
+  const groupedCategories = useMemo(() => {
+    const categories: ("Từ loại" | "Động từ" | "Ngữ pháp khác")[] = [
+      "Từ loại",
+      "Động từ",
+      "Ngữ pháp khác",
+    ];
+    return categories
+      .map((cat) => ({
+        category: cat,
+        topics: filteredGrammarTopics.filter((t) => t.category === cat),
+      }))
+      .filter((g) => g.topics.length > 0);
+  }, [filteredGrammarTopics]);
+
+  // Part 5-7 questions state
+  const [partSelectedMap, setPartSelectedMap] = useState<Record<string, number>>({});
+  const [partCheckedMap, setPartCheckedMap] = useState<Record<string, boolean>>({});
+
+  const partQuestions = useMemo(() => {
+    if (activeTab === "grammar") return [];
+    return READING_QUESTIONS.filter((q) => q.part === activeTab);
+  }, [activeTab]);
+
+  const handleStartRandom = () => {
+    const randomIndex = Math.floor(Math.random() * GRAMMAR_TOPICS.length);
+    setActivePracticeTopic(GRAMMAR_TOPICS[randomIndex]);
+    toast.success(`Đang mở ngẫu nhiên chủ điểm: ${GRAMMAR_TOPICS[randomIndex].title}`);
   };
 
-  return (
-    <div className="space-y-6">
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-            <BookOpenText size={16} weight="duotone" />
-            <span>Luyện Đọc TOEIC · Part 5, 6, 7</span>
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
-            Ngữ Pháp Trọng Tâm &amp; Đọc Hiểu Chi Tiết
-          </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Bố cục 2 cột cho Part 6–7, tự động tô sáng dẫn chứng trong bài đọc và gom câu đọc sai để ôn lại.
-          </p>
-        </div>
+  if (activePracticeTopic) {
+    return (
+      <>
+        <ReadingPracticeStudio
+          topic={activePracticeTopic}
+          onExit={() => setActivePracticeTopic(null)}
+          onOpenVocabDrawer={(w) => setDrawerWord(w)}
+          onOpenBasket={() => toast.info("Giỏ từ vựng lưu trữ trong mục Từ vựng.")}
+        />
+        {drawerWord && (
+          <WordDetailDrawer
+            word={drawerWord}
+            open={Boolean(drawerWord)}
+            onOpenChange={(open) => !open && setDrawerWord(null)}
+          />
+        )}
+      </>
+    );
+  }
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950">
-            {(["all", 5, 6, 7] as const).map((p) => (
+  return (
+    <div data-testid="reading-module" className="space-y-6">
+      {/* 1. Unified Hero Banner matching Screenshot 1 */}
+      <ModuleHeroBanner
+        kicker="Luyện đọc tiếng Anh"
+        titleLeading="Nắm chắc"
+        titleHighlight="ngữ pháp & kỹ năng đọc"
+        titleTrailing="mọi Part"
+        description="Luyện tập ngữ pháp trọng điểm TOEIC, phân tích từ loại, động từ và thực chiến giải đề Part 5, 6, 7 theo chuẩn giao diện Đậu English."
+        icon={BookOpenText}
+        searchPlaceholder="Gõ chủ điểm ngữ pháp (Danh từ, Thì, Bị động...) hoặc từ khóa"
+        searchValue={searchKeyword}
+        onSearchChange={setSearchKeyword}
+      />
+
+      {/* 2. Top Tabs: Ngữ pháp · Part 5 · Part 6 · Part 7 matching Screenshot 3 */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/80 pb-3 dark:border-slate-800">
+        <div
+          role="tablist"
+          aria-label="Chọn phần đọc"
+          className="inline-flex items-center gap-1 rounded-full border border-[#2463eb]/10 bg-[#2463eb]/5 p-1"
+        >
+          {READING_TABS.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
               <button
-                key={String(p)}
+                key={String(tab.id)}
                 type="button"
-                onClick={() => setPartFilter(p)}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveTab(tab.id)}
+                data-testid={`reading-tab-${tab.id}`}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                  partFilter === p
-                    ? "bg-white text-blue-600 shadow-xs dark:bg-slate-800 dark:text-blue-400"
-                    : "text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                  "cursor-pointer rounded-full px-5 py-2 text-sm font-semibold transition-colors",
+                  active
+                    ? "bg-[#2463eb] text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
                 )}
               >
-                {p === "all" ? "Tất cả" : `Part ${p}`}
+                {tab.label}
               </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setOnlyWrongFilter((v) => !v)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors",
-              onlyWrongFilter
-                ? "border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-            )}
-          >
-            <Fire size={14} weight={onlyWrongFilter ? "fill" : "duotone"} />
-            <span>Câu đọc cần luyện lại ({wrongIds.length})</span>
-          </button>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 font-mono text-xs font-semibold tabular-nums dark:border-slate-800 dark:bg-slate-950">
-            Đúng: {correctTotal}/{READING_QUESTIONS.length}
-          </div>
-        </div>
-      </section>
-
-      {items.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-          Không có câu đọc nào trong bộ lọc này. Hãy tắt bộ lọc &ldquo;Câu đọc cần luyện lại&rdquo; để xem toàn bộ bài tập.
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {items.map((q, idx) => {
-            const picked = selectedMap[q.id];
-            const isChecked = checkedMap[q.id];
-            const isCorrect = picked === q.correctIndex;
-            const hasPassage = Boolean(q.passageText);
-
-            return (
-              <article
-                key={q.id}
-                className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 text-xs text-slate-500 dark:border-slate-800">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    Câu {idx + 1} · Part {q.part} · {q.topic}
-                  </span>
-                  <span className="font-medium text-blue-600 dark:text-blue-400">
-                    {q.grammarPoint}
-                  </span>
-                </div>
-
-                <div
-                  className={cn(
-                    "mt-4 gap-5",
-                    hasPassage ? "grid lg:grid-cols-2" : "block"
-                  )}
-                >
-                  {q.passageText && (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
-                      <div className="mb-2 flex items-center justify-between">
-                        {q.passageTitle && (
-                          <p className="font-semibold text-slate-900 dark:text-slate-100">
-                            {q.passageTitle}
-                          </p>
-                        )}
-                        {isChecked && q.evidenceSnippet && (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-                            <Highlighter size={13} weight="duotone" />
-                            Đã tô dẫn chứng
-                          </span>
-                        )}
-                      </div>
-                      <p>
-                        {renderPassageWithEvidence(
-                          q.passageText,
-                          q.evidenceSnippet,
-                          Boolean(isChecked)
-                        )}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <p className="text-base font-medium text-slate-900 dark:text-slate-100">
-                      {q.questionText}
-                    </p>
-
-                    <div
-                      className={cn(
-                        "grid gap-2",
-                        hasPassage ? "grid-cols-1" : "sm:grid-cols-2"
-                      )}
-                    >
-                      {q.options.map((opt, optIdx) => {
-                        const chosen = picked === optIdx;
-                        const rightOption = optIdx === q.correctIndex;
-                        return (
-                          <button
-                            key={optIdx}
-                            type="button"
-                            onClick={() => {
-                              if (!isChecked) {
-                                setSelectedMap((prev) => ({
-                                  ...prev,
-                                  [q.id]: optIdx,
-                                }));
-                              }
-                            }}
-                            className={cn(
-                              "flex items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors",
-                              isChecked && rightOption
-                                ? "border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
-                                : isChecked && chosen && !rightOption
-                                ? "border-rose-400 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100"
-                                : chosen
-                                ? "border-blue-600 bg-blue-50/70 text-blue-900 dark:bg-blue-950/40 dark:text-blue-100"
-                                : "border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
-                            )}
-                          >
-                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-current font-mono text-xs font-semibold">
-                              {String.fromCharCode(65 + optIdx)}
-                            </span>
-                            <span>{opt}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3">
-                      {!isChecked ? (
-                        <button
-                          type="button"
-                          disabled={picked === undefined}
-                          onClick={() =>
-                            handleCheckQuestion(q.id, picked === q.correctIndex)
-                          }
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
-                        >
-                          Kiểm tra đáp án
-                        </button>
-                      ) : (
-                        <div className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-700 dark:bg-slate-950 dark:text-slate-300">
-                          {isCorrect ? (
-                            <CheckCircle
-                              size={17}
-                              weight="fill"
-                              className="mt-0.5 shrink-0 text-emerald-600"
-                            />
-                          ) : (
-                            <WarningCircle
-                              size={17}
-                              weight="fill"
-                              className="mt-0.5 shrink-0 text-rose-600"
-                            />
-                          )}
-                          <div>
-                            <strong className="text-slate-900 dark:text-slate-100">
-                              Giải thích:
-                            </strong>{" "}
-                            {q.explanationVi}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </article>
             );
           })}
         </div>
+      </div>
+
+      {/* 3. GRAMMAR VIEW matching Screenshot 3 */}
+      {activeTab === "grammar" ? (
+        <div className="space-y-6">
+          {/* Tip Banner matching Screenshot 3 */}
+          <div className="flex items-center gap-1.5 text-sm font-medium text-[#2463eb] dark:text-blue-400">
+            <LightbulbFilament size={18} weight="duotone" className="shrink-0" />
+            <span>Mẹo:</span>
+            <button
+              type="button"
+              onClick={() =>
+                toast.info(
+                  "Thứ tự ưu tiên học: 1. Từ loại (Danh, Tính, Trạng) -> 2. Thì & S-V -> 3. Bị động & Mệnh đề quan hệ."
+                )
+              }
+              className="cursor-pointer font-semibold underline underline-offset-2 hover:opacity-80"
+            >
+              Ngữ pháp TOEIC hay ra nhất và thứ tự học →
+            </button>
+          </div>
+
+          {/* Filter Pills + Luyện ngẫu nhiên Button matching Screenshot 3 */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {GRAMMAR_CATEGORY_FILTERS.map((f) => {
+                const active = grammarCategory === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setGrammarCategory(f.id)}
+                    data-testid={`grammar-filter-${f.id}`}
+                    className={cn(
+                      "cursor-pointer rounded-full px-4 py-1.5 text-sm font-semibold transition-colors",
+                      active
+                        ? "bg-[#2463eb] text-white shadow-xs"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleStartRandom}
+              data-testid="grammar-random-button"
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-[#2463eb] px-5 py-2 text-sm font-semibold text-white shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-blue-600"
+            >
+              <Shuffle size={16} weight="bold" />
+              <span>Luyện ngẫu nhiên</span>
+            </button>
+          </div>
+
+          {/* Grouped Catalog Cards matching Screenshot 3 */}
+          <div className="space-y-8">
+            {groupedCategories.map((group) => {
+              const totalItemsCount = group.topics.reduce((acc, t) => acc + t.totalCount, 0);
+              return (
+                <section key={group.category} className="space-y-3">
+                  <div>
+                    <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-50">
+                      {group.category}
+                    </h2>
+                    <p className="text-xs text-slate-500 tabular-nums">
+                      {group.topics.length} chủ điểm · {totalItemsCount} câu
+                    </p>
+                  </div>
+
+                  {/* 3-Column Grid matching Screenshot 3 */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.topics.map((topic) => (
+                      <div
+                        key={topic.id}
+                        data-testid={`grammar-card-${topic.id}`}
+                        className="group flex flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs transition-all hover:-translate-y-1 hover:border-[#2463eb]/40 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
+                      >
+                        <div>
+                          <h3 className="font-display text-base font-bold text-slate-900 group-hover:text-[#2463eb] dark:text-slate-100 dark:group-hover:text-blue-400">
+                            {topic.title}
+                          </h3>
+                          <p className="mt-1 text-xs text-slate-500 tabular-nums">
+                            Chưa luyện tập · {topic.totalCount} câu
+                          </p>
+                        </div>
+
+                        {/* Bottom Action Row: 4 Icons + "Học ngay" button */}
+                        <div className="mt-5 flex items-center justify-between pt-2">
+                          <div className="flex items-center gap-1 text-slate-400">
+                            <button
+                              type="button"
+                              onClick={() => toast.info(`Đã thêm chuyên đề ${topic.title} vào giỏ.`)}
+                              aria-label="Thêm vào giỏ"
+                              className="rounded p-1 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                            >
+                              <ShoppingBag size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(topic.title);
+                                toast.success(`Đã sao chép tên chuyên đề ${topic.title}`);
+                              }}
+                              aria-label="Sao chép"
+                              className="rounded p-1 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                            >
+                              <Copy size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toast.info("Đã đặt lại tiến độ chủ điểm.")}
+                              aria-label="Đặt lại tiến độ"
+                              className="rounded p-1 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                            >
+                              <ArrowClockwise size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toast.info("Đã ẩn chủ điểm khỏi danh sách.")}
+                              aria-label="Xóa"
+                              className="rounded p-1 transition-colors hover:bg-slate-100 hover:text-rose-500 dark:hover:bg-slate-800"
+                            >
+                              <Trash size={16} />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setActivePracticeTopic(topic)}
+                            data-testid={`study-button-${topic.id}`}
+                            className="inline-flex cursor-pointer items-center justify-center rounded-full border border-emerald-500 bg-white px-4 py-1.5 text-xs font-bold text-emerald-600 transition-colors hover:bg-emerald-500 hover:text-white dark:bg-slate-900 dark:hover:bg-emerald-600"
+                          >
+                            Học ngay
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* PART 5, 6, 7 TOEIC EXAM PRACTICE VIEW */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">
+              Luyện đề Part {activeTab} ({partQuestions.length} câu)
+            </h2>
+          </div>
+
+          <div className="space-y-4">
+            {partQuestions.map((q, idx) => {
+              const selectedIdx = partSelectedMap[q.id];
+              const isChecked = partCheckedMap[q.id];
+              const isCorrect = isChecked && selectedIdx === q.correctIndex;
+
+              return (
+                <div
+                  key={q.id}
+                  className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900"
+                >
+                  {q.passage && (
+                    <div className="mb-4 rounded-xl border border-blue-100 bg-[#eff6ff]/60 p-4 text-sm leading-relaxed text-slate-800 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-slate-200">
+                      <p className="font-semibold text-[#1d4ed8] dark:text-blue-300">Đoạn văn đọc:</p>
+                      <p className="mt-1 whitespace-pre-line">{q.passage}</p>
+                    </div>
+                  )}
+
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100">
+                    Câu {idx + 1}: {q.question}
+                  </h3>
+
+                  <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    {q.options.map((opt, oIdx) => {
+                      const isOptSelected = selectedIdx === oIdx;
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            if (!isChecked) {
+                              setPartSelectedMap((prev) => ({ ...prev, [q.id]: oIdx }));
+                            }
+                          }}
+                          className={cn(
+                            "flex cursor-pointer items-center gap-2.5 rounded-xl border p-3 text-left text-xs font-medium transition-colors",
+                            isOptSelected
+                              ? "border-[#2463eb] bg-blue-50/70 text-[#2463eb] dark:border-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
+                              : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+                          )}
+                        >
+                          <span className="font-bold">{String.fromCharCode(65 + oIdx)}.</span>
+                          <span>{opt}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+                    {!isChecked ? (
+                      <button
+                        type="button"
+                        disabled={selectedIdx === undefined}
+                        onClick={() => {
+                          setPartCheckedMap((prev) => ({ ...prev, [q.id]: true }));
+                          if (selectedIdx === q.correctIndex) {
+                            toast.success("Chính xác! +5 XP");
+                          } else {
+                            toast.error("Chưa chính xác!");
+                          }
+                        }}
+                        className="rounded-lg bg-[#2463eb] px-4 py-1.5 text-xs font-bold text-white transition-opacity disabled:opacity-40"
+                      >
+                        Kiểm tra đáp án
+                      </button>
+                    ) : (
+                      <div className="text-xs">
+                        {isCorrect ? (
+                          <span className="font-bold text-emerald-600">✓ Chính xác!</span>
+                        ) : (
+                          <span className="font-bold text-rose-600">
+                            ✗ Đáp án đúng: {String.fromCharCode(65 + q.correctIndex)}
+                          </span>
+                        )}
+                        <p className="mt-1 text-slate-600 dark:text-slate-400">{q.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {drawerWord && (
+        <WordDetailDrawer
+          word={drawerWord}
+          open={Boolean(drawerWord)}
+          onOpenChange={(open) => !open && setDrawerWord(null)}
+        />
       )}
     </div>
   );

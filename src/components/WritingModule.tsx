@@ -9,6 +9,7 @@ import {
 import { toast } from "sonner";
 import { WRITING_PROMPTS } from "../data/toeicDataset";
 import { cn, formatDuration } from "../lib/utils";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
 
 interface WritingEval {
   score: number;
@@ -78,45 +79,25 @@ export function WritingModule() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-              <PencilSimpleLine size={16} weight="duotone" />
-              <span>Luyện Viết TOEIC · Part 1–3</span>
-            </div>
-            <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
-              Thực Hành Viết Câu &amp; Phản Hồi Email Chuẩn Rubric
-            </h1>
-          </div>
+      <ModuleHeroBanner
+        kicker="Luyện viết tiếng Anh"
+        titleLeading="Diễn đạt câu từ"
+        titleHighlight="chuẩn văn phong công sở"
+        titleTrailing="tự tin"
+        description="Thực hành viết câu miêu tả tranh, phản hồi email và viết luận ngắn chuẩn thang điểm TOEIC Writing kèm chấm điểm tự động."
+        icon={PencilSimpleLine}
+        pills={[
+          { id: "part-1", label: "Part 1 Viết câu" },
+          { id: "part-2", label: "Part 2 Phản hồi Email" },
+          { id: "part-3", label: "Part 3 Viết luận" },
+        ]}
+        activePill={`part-${prompt.part}`}
+        onSelectPill={(id) => toast.info(`Đang lọc: ${id}`)}
+        searchPlaceholder="Gõ từ khóa đề bài viết hoặc chủ đề email..."
+      />
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 font-mono text-xs font-bold text-slate-900 tabular-nums dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
-              <Timer size={15} className="text-blue-600" />
-              <span>{formatDuration(secondsLeft)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setTimerRunning((r) => !r)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-            >
-              {timerRunning ? "Tạm dừng" : "Bắt đầu tính giờ"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setTimerRunning(false);
-                setSecondsLeft(prompt.part === 1 ? 480 : 600);
-              }}
-              aria-label="Đặt lại đồng hồ"
-              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-            >
-              <ArrowCounterClockwise size={14} />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
           {WRITING_PROMPTS.map((item) => (
             <button
               key={item.id}
@@ -139,7 +120,32 @@ export function WritingModule() {
             </button>
           ))}
         </div>
-      </section>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 font-mono text-xs font-bold text-slate-900 tabular-nums dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
+            <Timer size={15} className="text-blue-600" />
+            <span>{formatDuration(secondsLeft)}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTimerRunning((r) => !r)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          >
+            {timerRunning ? "Tạm dừng" : "Bắt đầu tính giờ"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTimerRunning(false);
+              setSecondsLeft(prompt.part === 1 ? 480 : 600);
+            }}
+            aria-label="Đặt lại đồng hồ"
+            className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+          >
+            <ArrowCounterClockwise size={14} />
+          </button>
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

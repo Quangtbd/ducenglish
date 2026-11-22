@@ -119,7 +119,9 @@ async function startServer() {
           text: `${line.speaker}: ${line.text}`,
           speechMetadata: {
             speaker: line.speaker === speakerA ? speakerA : speakerB,
-            style: line.style || "Natural, clear standard TOEIC conversation pace",
+            style:
+              line.style ||
+              "Natural, fluent American conversational style with authentic connected speech, appropriate pitch variations, and realistic conversational pacing",
           },
         }));
 

@@ -120,11 +120,26 @@ export function speakWithBrowserFallback(
   utterance.rate = rate;
   const voices = window.speechSynthesis.getVoices();
   const preferred =
-    voices.find((v) => v.lang.startsWith("en-US") && v.name.includes("Natural")) ||
+    voices.find(
+      (v) =>
+        v.lang.startsWith("en-US") &&
+        (v.name.includes("Natural") ||
+          v.name.includes("Neural") ||
+          v.name.includes("Guy") ||
+          v.name.includes("Jenny") ||
+          v.name.includes("Christopher") ||
+          v.name.includes("Aria") ||
+          v.name.includes("Google") ||
+          v.name.includes("Samantha") ||
+          v.name.includes("Daniel"))
+    ) ||
+    voices.find((v) => v.lang.startsWith("en-US") && !v.name.includes("Desktop")) ||
+    voices.find((v) => v.lang.startsWith("en-US")) ||
     voices.find((v) => v.lang.startsWith("en"));
   if (preferred) {
     utterance.voice = preferred;
   }
+  utterance.pitch = 1.0;
   if (onEnd) {
     utterance.onend = onEnd;
   }

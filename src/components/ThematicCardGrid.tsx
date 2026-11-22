@@ -164,9 +164,7 @@ export function ThematicCardGrid({
                     />
                   )}
                   <span className="relative z-10">
-                    {lv === "all"
-                      ? "Tất cả A1–C2"
-                      : `${lv} (${CEFR_LEVEL_META[lv].scoreBand})`}
+                    {lv === "all" ? "Tất cả A1–C2" : lv}
                   </span>
                 </button>
               );

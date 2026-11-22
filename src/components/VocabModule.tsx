@@ -14,6 +14,7 @@ import { VOCAB_TOPIC_PACKS } from "../data/toeicDataset";
 import { speakWithBrowserFallback } from "../lib/audioService";
 import { saveVocabToNotebook, updateVocabMastery } from "../lib/db";
 import { cn } from "../lib/utils";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
 
 interface VocabModuleProps {
   vocabList: VocabEntry[];
@@ -78,51 +79,21 @@ export function VocabModule({ vocabList, onDataChanged }: VocabModuleProps) {
 
   return (
     <div className="space-y-6">
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-            <Cards size={16} weight="duotone" />
-            <span>Từ Vựng TOEIC · Chủ Đề &amp; Giỏ Từ Vựng Cá Nhân</span>
-          </div>
-          <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
-            Ôn Tập Từ Vựng Trọng Tâm &amp; Từ Đã Lưu
-          </h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Tách riêng Giỏ từ vựng cá nhân (đồng bộ từ bài nghe chép) và Bộ từ vựng theo chủ đề TOEIC.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-950">
-            <button
-              type="button"
-              onClick={() => setSectionTab("basket")}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                sectionTab === "basket"
-                  ? "bg-white text-blue-600 shadow-xs dark:bg-slate-800 dark:text-blue-400"
-                  : "text-slate-600 dark:text-slate-400"
-              )}
-            >
-              <Basket size={14} weight="duotone" />
-              <span>Giỏ từ vựng cá nhân ({vocabList.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSectionTab("packs")}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold transition-colors",
-                sectionTab === "packs"
-                  ? "bg-white text-blue-600 shadow-xs dark:bg-slate-800 dark:text-blue-400"
-                  : "text-slate-600 dark:text-slate-400"
-              )}
-            >
-              <FolderOpen size={14} weight="duotone" />
-              <span>Bộ từ vựng theo chủ đề ({VOCAB_TOPIC_PACKS.length})</span>
-            </button>
-          </div>
-        </div>
-      </section>
+      <ModuleHeroBanner
+        kicker="3000 Từ vựng TOEIC cốt lõi"
+        titleLeading="Ghi nhớ từ vựng sâu sắc"
+        titleHighlight="qua ngữ cảnh & phản xạ"
+        titleTrailing="dài hạn"
+        description="Ôn tập từ vựng cá nhân đồng bộ từ các bài nghe chép và bộ từ vựng phân loại theo chủ đề TOEIC thông dụng."
+        icon={Cards}
+        pills={[
+          { id: "basket", label: `Giỏ từ vựng cá nhân (${vocabList.length})` },
+          { id: "packs", label: `Bộ từ vựng theo chủ đề (${VOCAB_TOPIC_PACKS.length})` },
+        ]}
+        activePill={sectionTab}
+        onSelectPill={(id) => setSectionTab(id as "basket" | "packs")}
+        searchPlaceholder="Tra cứu từ vựng tiếng Anh hoặc nghĩa tiếng Việt..."
+      />
 
       {sectionTab === "packs" ? (
         <div className="grid gap-5 md:grid-cols-2">

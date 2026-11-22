@@ -24,7 +24,13 @@ export type TopicId =
   | "finance"
   | "hr"
   | "travel"
-  | "marketing";
+  | "marketing"
+  | "airport"
+  | "hotel"
+  | "restaurant"
+  | "tech"
+  | "health"
+  | "shopping";
 
 export interface DialogueLine {
   speaker: string;

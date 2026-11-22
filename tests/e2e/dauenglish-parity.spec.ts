@@ -175,7 +175,7 @@ test.describe("UI Parity Comparison: Duc English vs DauEnglish.com", () => {
       "Ctrl: phát lại · Tab: lật từ · Enter: câu tiếp theo · ←/→: chuyển câu"
     );
     await expect(page.getByTestId("question-switcher-button")).toContainText(
-      "1/3"
+      "1/6"
     );
 
     // Click Hỏi bài popover & check content
@@ -230,5 +230,73 @@ test.describe("UI Parity Comparison: Duc English vs DauEnglish.com", () => {
     );
     expect(isDark).toBe(true);
     await page.getByTestId("theme-toggle-button").click();
+  });
+
+  test("verifies clean A1-C2 pills without score bands, owl logo, and Reading 3-column practice studio", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    // 1. Check owl logo in TopNav
+    const brandImg = page.locator('[data-testid="brand-logo-button"] img');
+    await expect(brandImg).toBeVisible();
+    await expect(brandImg).toHaveAttribute(
+      "src",
+      "/assets/aistudio/0f777f68-388b-4e0b-a765-466be82c8642_6c463418.jfif"
+    );
+
+    // 2. Check clean CEFR pills without score numbers
+    const pillA1 = page.getByTestId("cefr-filter-A1");
+    await expect(pillA1).toHaveText("A1");
+    const pillC2 = page.getByTestId("cefr-filter-C2");
+    await expect(pillC2).toHaveText("C2");
+
+    // 3. Navigate to Reading module
+    await page.getByTestId("nav-read").click();
+    await expect(page.getByTestId("reading-module")).toBeVisible();
+    await expect(page.getByText("Nắm chắc")).toBeVisible();
+    await expect(page.getByText("ngữ pháp & kỹ năng đọc")).toBeVisible();
+
+    // Verify Reading Grammar Catalog groups
+    await expect(page.getByText("Từ loại").first()).toBeVisible();
+    await expect(page.getByText("Động từ").first()).toBeVisible();
+    await expect(page.getByTestId("grammar-card-noun")).toBeVisible();
+
+    // Click "Học ngay" on Danh từ to enter 3-column Reading Practice Studio
+    await page.getByTestId("study-button-noun").click();
+    await expect(page.getByTestId("reading-practice-studio")).toBeVisible();
+    await expect(page.getByText("Ngữ pháp · Danh từ")).toBeVisible();
+    await expect(page.getByTestId("reading-question-card")).toBeVisible();
+    await expect(
+      page.getByText("Chọn đáp án để xem giải thích chi tiết, dịch nghĩa và từ vựng nên học.")
+    ).toBeVisible();
+
+    // Select option (C) Tính từ
+    await page.getByTestId("option-button-2").click();
+
+    // Verify instant explainer panel revealed
+    await expect(page.getByTestId("reading-explainer-panel")).toContainText("Chính xác! (+5 XP)");
+    await expect(page.getByText("Giải thích chi tiết:")).toBeVisible();
+    await expect(page.getByText("Từ vựng nên học")).toBeVisible();
+
+    // Exit studio back to catalog
+    await page.getByTestId("exit-reading-studio-button").click();
+    await expect(page.getByTestId("reading-module")).toBeVisible();
+
+    // 4. Verify Speaking module banner
+    await page.getByTestId("nav-speak").click();
+    await expect(page.getByText("Nói tự nhiên")).toBeVisible();
+    await expect(page.getByText("như người bản xứ")).toBeVisible();
+    await expect(page.getByTestId("banner-pill-shadowing")).toBeVisible();
+
+    // 5. Verify Writing module banner
+    await page.getByTestId("nav-write").click();
+    await expect(page.getByText("Diễn đạt câu từ")).toBeVisible();
+    await expect(page.getByText("chuẩn văn phong công sở")).toBeVisible();
+
+    // 6. Verify Vocab module banner
+    await page.getByTestId("nav-vocab").click();
+    await expect(page.getByText("Ghi nhớ từ vựng sâu sắc")).toBeVisible();
   });
 });

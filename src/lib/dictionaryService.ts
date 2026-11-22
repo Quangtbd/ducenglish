@@ -667,9 +667,24 @@ function speakWordWithBrowser(word: string, accent: "US" | "UK") {
     utter.lang = accent === "UK" ? "en-GB" : "en-US";
     utter.rate = 0.92;
     const voices = window.speechSynthesis.getVoices();
-    const matched = voices.find((v) =>
-      accent === "UK" ? v.lang.startsWith("en-GB") : v.lang.startsWith("en-US")
-    );
+    const prefix = accent === "UK" ? "en-GB" : "en-US";
+    const matched =
+      voices.find(
+        (v) =>
+          v.lang.startsWith(prefix) &&
+          (v.name.includes("Natural") ||
+            v.name.includes("Neural") ||
+            v.name.includes("Guy") ||
+            v.name.includes("Jenny") ||
+            v.name.includes("Sonia") ||
+            v.name.includes("Ryan") ||
+            v.name.includes("Google") ||
+            v.name.includes("Samantha") ||
+            v.name.includes("Oliver"))
+      ) ||
+      voices.find((v) => v.lang.startsWith(prefix) && !v.name.includes("Desktop")) ||
+      voices.find((v) => v.lang.startsWith(prefix)) ||
+      voices.find((v) => v.lang.startsWith("en"));
     if (matched) utter.voice = matched;
     window.speechSynthesis.speak(utter);
   } catch {

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { SPEAKING_PROMPTS } from "../data/toeicDataset";
 import { speakWithBrowserFallback, stopBrowserSpeech } from "../lib/audioService";
 import { cn, formatDuration } from "../lib/utils";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
 
 interface SpeakingEval {
   score: number;
@@ -168,42 +169,28 @@ export function SpeakingModule() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-blue-600 dark:text-blue-400">
-              <Microphone size={16} weight="duotone" />
-              <span>Luyện Nói TOEIC · Shadowing &amp; Speaking Part 1–5</span>
-            </div>
-            <h1 className="mt-1 font-display text-2xl font-bold text-slate-900 dark:text-slate-50">
-              Shadowing Theo Giọng Chuẩn &amp; Ghi Âm Đối Chiếu
-            </h1>
-          </div>
+      <ModuleHeroBanner
+        kicker="Luyện nói tiếng Anh"
+        titleLeading="Nói tự nhiên"
+        titleHighlight="như người bản xứ"
+        titleTrailing="từ từng câu ngắn"
+        description="Shadowing theo video và luyện TOEIC Speaking Part 1–5 như đề thật: ghi âm theo giờ, chấm ngay từng câu."
+        icon={Microphone}
+        pills={[
+          { id: "shadowing", label: "Shadowing" },
+          { id: "part-1", label: "Part 1" },
+          { id: "part-2", label: "Part 2" },
+          { id: "part-3", label: "Part 3" },
+          { id: "part-4", label: "Part 4" },
+          { id: "part-5", label: "Part 5" },
+        ]}
+        activePill="shadowing"
+        onSelectPill={(id) => toast.info(`Đang chuyển sang chuyên mục: ${id}`)}
+        searchPlaceholder="Gõ video bạn muốn xem (tiếng Anh) hoặc dán link YouTube"
+      />
 
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 font-mono text-xs font-bold text-slate-900 tabular-nums dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
-              <Timer size={15} className="text-blue-600" />
-              <span>
-                {phase === "prep"
-                  ? "Chuẩn bị: "
-                  : phase === "speak"
-                  ? "Trả lời: "
-                  : "Chuẩn TOEIC: "}
-                {formatDuration(countdown)}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleStartPrepTimer}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-            >
-              <ArrowCounterClockwise size={14} />
-              <span>Bấm giờ 15s/45s</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
           {SPEAKING_PROMPTS.map((item) => (
             <button
               key={item.id}
@@ -227,7 +214,29 @@ export function SpeakingModule() {
             </button>
           ))}
         </div>
-      </section>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2 font-mono text-xs font-bold text-slate-900 tabular-nums dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
+            <Timer size={15} className="text-blue-600" />
+            <span>
+              {phase === "prep"
+                ? "Chuẩn bị: "
+                : phase === "speak"
+                ? "Trả lời: "
+                : "Chuẩn TOEIC: "}
+              {formatDuration(countdown)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartPrepTimer}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+          >
+            <ArrowCounterClockwise size={14} />
+            <span>Bấm giờ 15s/45s</span>
+          </button>
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

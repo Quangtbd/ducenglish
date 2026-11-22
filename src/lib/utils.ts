@@ -32,18 +32,24 @@ export const TOPIC_LABELS: Record<TopicId, string> = {
   hr: "Nhân sự & Tuyển dụng",
   travel: "Công tác & Dịch vụ",
   marketing: "Kinh doanh & Tiếp thị",
+  airport: "Sân bay & Hàng không",
+  hotel: "Khách sạn & Nghỉ dưỡng",
+  restaurant: "Nhà hàng & Ẩm thực",
+  tech: "Công nghệ & IT",
+  health: "Y tế & Sức khỏe",
+  shopping: "Mua sắm & Bán lẻ",
 };
 
 export const CEFR_LEVEL_META: Record<
   "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
-  { label: string; scoreBand: string; desc: string }
+  { label: string; desc: string }
 > = {
-  A1: { label: "A1 · Nhập môn", scoreBand: "<300", desc: "Câu ngắn, từ vựng văn phòng cơ bản" },
-  A2: { label: "A2 · Sơ cấp", scoreBand: "300–450", desc: "Tình huống giao tiếp & thông báo quen thuộc" },
-  B1: { label: "B1 · Trung cấp", scoreBand: "450–650", desc: "Hội thoại công sở & dịch vụ nhiều lượt" },
-  B2: { label: "B2 · Trên trung cấp", scoreBand: "650–780", desc: "Thảo luận quy trình, báo cáo & phản hồi" },
-  C1: { label: "C1 · Nâng cao", scoreBand: "780–880", desc: "Đàm phán chuyên sâu, kiểm toán & hàng không" },
-  C2: { label: "C2 · Thành thạo", scoreBand: "880–990", desc: "Tốc độ bản ngữ, thuật ngữ tài chính & điều hành" },
+  A1: { label: "A1 · Nhập môn", desc: "Câu ngắn, từ vựng văn phòng cơ bản" },
+  A2: { label: "A2 · Sơ cấp", desc: "Tình huống giao tiếp & thông báo quen thuộc" },
+  B1: { label: "B1 · Trung cấp", desc: "Hội thoại công sở & dịch vụ nhiều lượt" },
+  B2: { label: "B2 · Trên trung cấp", desc: "Thảo luận quy trình, báo cáo & phản hồi" },
+  C1: { label: "C1 · Nâng cao", desc: "Đàm phán chuyên sâu, kiểm toán & hàng không" },
+  C2: { label: "C2 · Thành thạo", desc: "Tốc độ bản ngữ, thuật ngữ tài chính & điều hành" },
 };
 
 export const COLLECTION_TABS = [
