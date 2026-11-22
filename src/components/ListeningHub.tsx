@@ -1,14 +1,9 @@
 import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import NumberFlow from "@number-flow/react";
 import { useAutoAnimate } from "@formkit/auto-animate/react";
 import {
   Headphones,
   Fire,
-  Trash,
-  Play,
-  Lightning,
-  CheckCircle,
 } from "@phosphor-icons/react";
 import type {
   CefrLevel,
@@ -22,12 +17,15 @@ import type {
   UserProfile,
   VocabEntry,
 } from "../types/toeic";
-import { THEMATIC_LISTENING_SETS } from "../data/thematicListeningSets";
 import { TOPIC_LABELS, cn } from "../lib/utils";
 import { toggleReviewQueueItem } from "../lib/db";
+import { toast } from "sonner";
+import { Trash } from "lucide-react";
 import { ThematicCardGrid } from "./ThematicCardGrid";
 import { DictationStudio } from "./DictationStudio";
-import { TipsDrawerTrigger } from "./ui/UiPrimitives";
+import { PartListeningHub } from "./PartListeningHub";
+import { ModuleHeroBanner } from "./ui/ModuleHeroBanner";
+import { THEMATIC_LISTENING_SETS } from "../data/thematicListeningSets";
 
 interface ListeningHubProps {
   questions: ListeningQuestion[];
@@ -56,17 +54,6 @@ interface ListeningHubProps {
   onChangeViewMode: (mode: "matrix" | "review") => void;
 }
 
-const PART_PILL_FILTERS: {
-  id: ToeicPart | "all";
-  label: string;
-}[] = [
-  { id: "all", label: "Tất cả Part" },
-  { id: 1, label: "Part 1" },
-  { id: 2, label: "Part 2" },
-  { id: 3, label: "Part 3" },
-  { id: 4, label: "Part 4" },
-];
-
 export function ListeningHub({
   questions,
   attempts,
@@ -81,29 +68,9 @@ export function ListeningHub({
   viewMode,
   onChangeViewMode,
 }: ListeningHubProps) {
-  const [selectedPart, setSelectedPart] = useState<ToeicPart | "all">("all");
+  const [activeListeningSubTab, setActiveListeningSubTab] = useState<"listen-check" | 1 | 2 | 3 | 4>("listen-check");
   const [selectedTopic, setSelectedTopic] = useState<TopicId>("all");
   const [reviewListRef] = useAutoAnimate();
-
-  const reviewQuestions = useMemo(() => {
-    const qMap = new Map(questions.map((q) => [q.id, q]));
-    return reviewQueue
-      .map((item) => ({
-        item,
-        question: qMap.get(item.questionId),
-      }))
-      .filter(
-        (pair): pair is { item: ReviewQueueItem; question: ListeningQuestion } =>
-          Boolean(pair.question)
-      );
-  }, [questions, reviewQueue]);
-
-  const uniqueCompletedCount = useMemo(() => {
-    const masteredIds = new Set(
-      attempts.filter((a) => a.accuracy >= 80).map((a) => a.questionId)
-    );
-    return masteredIds.size;
-  }, [attempts]);
 
   const handleStartThematicSet = (set: ThematicListeningSet) => {
     onStartStudio(
@@ -140,78 +107,66 @@ export function ListeningHub({
     );
   }
 
+  if (activeListeningSubTab !== "listen-check") {
+    return (
+      <PartListeningHub
+        initialPart={activeListeningSubTab}
+        onStartLegacyStudio={() => setActiveListeningSubTab("listen-check")}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Hero Banner focused on A1 -> C2 curriculum */}
-      <section
-        data-testid="hero-banner"
-        className="relative overflow-hidden rounded-2xl border border-[#2463eb]/10 bg-[#2463eb]/5 px-6 py-6 md:px-8 md:py-7 dark:border-blue-900/50 dark:bg-blue-950/30"
-      >
-        <div className="flex items-center justify-between gap-6">
-          <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2463eb]/15 bg-white/90 px-3 py-1 text-sm font-medium text-[#2463eb] dark:border-blue-800 dark:bg-slate-900 dark:text-blue-400">
-              <Headphones size={16} weight="duotone" />
-              <span>Lộ trình Nghe TOEIC A1 → C2</span>
-            </span>
-            <h1 className="mt-3 font-display text-2xl font-bold tracking-tight text-[#1f2937] sm:text-4xl dark:text-slate-50">
-              Chinh phục{" "}
-              <span className="bg-gradient-to-r from-[#2463eb] to-blue-500 bg-clip-text text-transparent">
-                TOEIC Listening
-              </span>{" "}
-              từ dễ đến khó
-            </h1>
-            <p className="mt-2 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-400">
-              Luyện Nghe check, Nghe chép chính tả và mở rộng vốn từ theo 6 cấp độ chuẩn quốc tế A1 → C2.
-            </p>
-          </div>
+      {/* Unified Hero Banner matching Screenshot 1 */}
+      <ModuleHeroBanner
+        kicker="Lộ trình Nghe TOEIC A1 → C2"
+        titleLeading="Chinh phục"
+        titleHighlight="TOEIC Listening"
+        titleTrailing="từ dễ đến khó"
+        description="Luyện Nghe check, Nghe chép chính tả và mở rộng vốn từ theo 6 cấp độ chuẩn quốc tế A1 → C2 hoặc chuyển sang Part 1–4."
+        icon={Headphones}
+        pills={[
+          { id: "listen-check", label: "Nghe chép" },
+          { id: "1", label: "Part 1" },
+          { id: "2", label: "Part 2" },
+          { id: "3", label: "Part 3" },
+          { id: "4", label: "Part 4" },
+        ]}
+        activePill="listen-check"
+        onSelectPill={(id) => {
+          if (id !== "listen-check") {
+            setActiveListeningSubTab(Number(id) as 1 | 2 | 3 | 4);
+          }
+        }}
+        searchPlaceholder="Gõ từ khóa bộ đề nghe hoặc chủ đề đàm thoại..."
+      />
 
-          <div
-            data-testid="hero-headphones-badge"
-            className="hidden h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#2463eb] to-blue-500 text-white shadow-lg shadow-[#2463eb]/25 transition-transform duration-300 hover:scale-105 md:flex lg:h-24 lg:w-24"
-          >
-            <Headphones size={46} weight="duotone" />
-          </div>
-        </div>
-      </section>
-
-      {/* Filter Bar: Part 1-4 Pill Switcher + Topic Filter + Review Queue */}
+      {/* Filter Bar: Topic Filter + Review Queue */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Rounded-full Part Tab Bar */}
-          <div
-            role="tablist"
-            aria-label="Chọn phần nghe"
-            data-testid="part-tablist"
-            className="inline-flex flex-wrap items-center gap-1 rounded-full border border-[#2463eb]/10 bg-[#2463eb]/5 p-1"
-          >
-            {PART_PILL_FILTERS.map((item) => {
-              const active = viewMode === "matrix" && selectedPart === item.id;
+          <div className="flex flex-wrap items-center gap-1">
+            {(["listen-check", 1, 2, 3, 4] as const).map((tab) => {
+              const active = activeListeningSubTab === tab;
               return (
                 <button
-                  key={String(item.id)}
+                  key={String(tab)}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
                   onClick={() => {
-                    setSelectedPart(item.id);
-                    onChangeViewMode("matrix");
+                    if (tab === "listen-check") {
+                      setActiveListeningSubTab("listen-check");
+                    } else {
+                      setActiveListeningSubTab(tab);
+                    }
                   }}
-                  data-testid={`filter-part-${item.id}`}
                   className={cn(
-                    "relative shrink-0 cursor-pointer whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors md:px-5",
+                    "cursor-pointer rounded-full px-5 py-2 text-sm font-semibold transition-colors",
                     active
-                      ? "text-white"
+                      ? "bg-[#2463eb] text-white shadow-xs"
                       : "text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
                   )}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="hubPartActivePill"
-                      transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                      className="absolute inset-0 rounded-full bg-[#2463eb] shadow-sm"
-                    />
-                  )}
-                  <span className="relative z-10">{item.label}</span>
+                  {tab === "listen-check" ? "Nghe chép" : `Part ${tab}`}
                 </button>
               );
             })}
@@ -249,135 +204,96 @@ export function ListeningHub({
             </button>
           </div>
         </div>
-
-        {/* Vaul Drawer Mẹo link + Inline Streak / XP / Progress summary */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <TipsDrawerTrigger />
-
-          <div className="flex items-center gap-4 text-sm font-medium text-slate-500 tabular-nums dark:text-slate-400">
-            <span className="inline-flex items-center gap-1.5">
-              <Fire size={16} weight="duotone" className="text-amber-600" />
-              <strong className="font-mono text-slate-800 dark:text-slate-200">
-                <NumberFlow value={profile.streakDays} />
-              </strong>{" "}
-              ngày
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <Lightning size={16} weight="duotone" className="text-[#2463eb]" />
-              <strong className="font-mono text-slate-800 dark:text-slate-200">
-                <NumberFlow value={profile.xp} />
-              </strong>{" "}
-              XP
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle size={16} weight="duotone" className="text-emerald-600" />
-              <strong className="font-mono text-slate-800 dark:text-slate-200">
-                <NumberFlow value={uniqueCompletedCount} />/{questions.length}
-              </strong>{" "}
-              câu
-            </span>
-          </div>
-        </div>
       </div>
 
-      {/* Main Content Area: Either Review Queue or A1->C2 Thematic Curriculum */}
-      {viewMode === "review" ? (
-        <div className="space-y-3 rounded-xl border border-[#e1e7ef] bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
-            <div>
-              <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">
-                Danh sách Câu cần luyện lại
-              </h2>
-              <p className="text-sm text-slate-500">
-                Các câu đạt dưới 75% hoặc bạn đánh dấu lưu lại để ôn lặp lại ngắt quãng.
-              </p>
-            </div>
-            {reviewQuestions.length > 0 && (
-              <button
-                type="button"
-                onClick={() =>
-                  onStartStudio(
-                    "Ôn tập Câu cần luyện lại",
-                    reviewQuestions.map((r) => r.question),
-                    0,
-                    "check"
-                  )
-                }
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
-              >
-                <Play size={15} weight="fill" />
-                <span>Luyện tất cả ({reviewQuestions.length} câu)</span>
-              </button>
-            )}
-          </div>
-
-          <div ref={reviewListRef} className="space-y-2.5">
-            {reviewQuestions.length === 0 ? (
-              <div className="py-10 text-center text-base text-slate-500">
-                Chưa có câu nào cần ôn lại. Hãy chọn một chủ đề A1–C2 bên dưới để luyện tập!
-              </div>
-            ) : (
-              reviewQuestions.map(({ item, question }, idx) => (
-                <div
-                  key={question.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e1e7ef] p-4 dark:border-slate-800"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <span>Part {question.part}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono text-rose-600 tabular-nums">
-                        Gần nhất: {item.lastAccuracy}%
-                      </span>
-                    </div>
-                    <p className="mt-1 truncate text-base font-medium text-slate-900 dark:text-slate-100">
-                      {question.title}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onStartStudio(
-                          "Ôn tập Câu cần luyện lại",
-                          reviewQuestions.map((r) => r.question),
-                          idx,
-                          "check"
-                        )
-                      }
-                      className="cursor-pointer rounded-lg bg-[#2463eb] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
-                    >
-                      Nghe lại
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Xóa khỏi danh sách luyện lại"
-                      onClick={async () => {
-                        await toggleReviewQueueItem(question.id);
-                        onDataChanged();
-                      }}
-                      className="cursor-pointer rounded-lg border border-[#e1e7ef] p-2 text-slate-500 hover:bg-slate-100 hover:text-rose-600 dark:border-slate-700"
-                    >
-                      <Trash size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      ) : (
+      {viewMode === "matrix" ? (
         <ThematicCardGrid
           sets={THEMATIC_LISTENING_SETS}
           attempts={attempts}
           reviewQueue={reviewQueue}
-          selectedPart={selectedPart}
+          selectedPart={"all"}
           selectedTopic={selectedTopic}
           onStartThematicSet={handleStartThematicSet}
           onDataChanged={onDataChanged}
         />
+      ) : (
+        <div className="space-y-4" ref={reviewListRef}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-display text-lg font-bold text-slate-900 dark:text-slate-50">
+              Danh sách câu cần luyện lại ({reviewQueue.length})
+            </h3>
+            <button
+              type="button"
+              onClick={() => onChangeViewMode("matrix")}
+              className="text-sm font-medium text-[#2463eb] hover:underline dark:text-blue-400"
+            >
+              ← Quay lại lộ trình A1–C2
+            </button>
+          </div>
+
+          {reviewQueue.length === 0 ? (
+            <div className="rounded-xl border border-[#e1e7ef] bg-white p-12 text-center dark:border-slate-800 dark:bg-slate-900">
+              <p className="text-sm text-slate-500">
+                Chưa có câu nào trong danh sách cần luyện lại. Tuyệt vời!
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {reviewQueue.map((item) => {
+                const q = questions.find((x) => x.id === item.questionId);
+                if (!q) return null;
+                return (
+                  <div
+                    key={item.questionId}
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                          Part {q.part}
+                        </span>
+                        <span className="font-mono text-xs text-slate-400">
+                          Luyện lại lần {item.retryCount + 1}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-slate-900 truncate dark:text-slate-100">
+                        {q.transcript}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onStartStudio(
+                            `Ôn tập · Part ${q.part}`,
+                            [q],
+                            0,
+                            "check"
+                          )
+                        }
+                        className="rounded-lg bg-[#2463eb] px-4 py-2 text-xs font-bold text-white transition-transform hover:scale-105"
+                      >
+                        Luyện ngay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await toggleReviewQueueItem(q.id);
+                          onDataChanged();
+                          toast.success("Đã xóa khỏi danh sách cần luyện lại");
+                        }}
+                        className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        <Trash size={16} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

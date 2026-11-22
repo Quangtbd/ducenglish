@@ -117,7 +117,6 @@ export function ReadingPracticeStudio({
         phonetic: v.phonetic,
         meaningVi: v.meaningVi,
         exampleSentence: currentQ?.questionText || "",
-        contextSentence: currentQ?.questionText || "",
         topic: "Ngữ pháp",
       });
       setAddedVocabWords((prev) => new Set([...prev, v.word]));

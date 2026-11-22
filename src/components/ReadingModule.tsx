@@ -86,21 +86,12 @@ export function ReadingModule() {
 
   if (activePracticeTopic) {
     return (
-      <>
-        <ReadingPracticeStudio
-          topic={activePracticeTopic}
-          onExit={() => setActivePracticeTopic(null)}
-          onOpenVocabDrawer={(w) => setDrawerWord(w)}
-          onOpenBasket={() => toast.info("Giỏ từ vựng lưu trữ trong mục Từ vựng.")}
-        />
-        {drawerWord && (
-          <WordDetailDrawer
-            word={drawerWord}
-            open={Boolean(drawerWord)}
-            onOpenChange={(open) => !open && setDrawerWord(null)}
-          />
-        )}
-      </>
+      <ReadingPracticeStudio
+        topic={activePracticeTopic}
+        onExit={() => setActivePracticeTopic(null)}
+        onOpenVocabDrawer={(w) => setDrawerWord(w)}
+        onOpenBasket={() => toast.info("Giỏ từ vựng lưu trữ trong mục Từ vựng.")}
+      />
     );
   }
 
@@ -314,15 +305,15 @@ export function ReadingModule() {
                   key={q.id}
                   className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs dark:border-slate-800 dark:bg-slate-900"
                 >
-                  {q.passage && (
+                  {q.passageText && (
                     <div className="mb-4 rounded-xl border border-blue-100 bg-[#eff6ff]/60 p-4 text-sm leading-relaxed text-slate-800 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-slate-200">
                       <p className="font-semibold text-[#1d4ed8] dark:text-blue-300">Đoạn văn đọc:</p>
-                      <p className="mt-1 whitespace-pre-line">{q.passage}</p>
+                      <p className="mt-1 whitespace-pre-line">{q.passageText}</p>
                     </div>
                   )}
 
                   <h3 className="font-semibold text-slate-900 dark:text-slate-100">
-                    Câu {idx + 1}: {q.question}
+                    Câu {idx + 1}: {q.questionText}
                   </h3>
 
                   <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -377,7 +368,7 @@ export function ReadingModule() {
                             ✗ Đáp án đúng: {String.fromCharCode(65 + q.correctIndex)}
                           </span>
                         )}
-                        <p className="mt-1 text-slate-600 dark:text-slate-400">{q.explanation}</p>
+                        <p className="mt-1 text-slate-600 dark:text-slate-400">{q.explanationVi}</p>
                       </div>
                     )}
                   </div>
@@ -386,14 +377,6 @@ export function ReadingModule() {
             })}
           </div>
         </div>
-      )}
-
-      {drawerWord && (
-        <WordDetailDrawer
-          word={drawerWord}
-          open={Boolean(drawerWord)}
-          onOpenChange={(open) => !open && setDrawerWord(null)}
-        />
       )}
     </div>
   );
