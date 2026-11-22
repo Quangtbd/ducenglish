@@ -105,14 +105,18 @@ export function DauWaveformPlayer({
     setPeaks(buildSyntheticPeaks(question.transcript));
 
     if (activeUrlRef.current) {
-      URL.revokeObjectURL(activeUrlRef.current);
+      if (activeUrlRef.current.startsWith("blob:")) {
+        URL.revokeObjectURL(activeUrlRef.current);
+      }
       activeUrlRef.current = null;
     }
     setAudioUrl(null);
 
     resolveQuestionAudio(question).then((res) => {
       if (cancelled) {
-        if (res.objectUrl) URL.revokeObjectURL(res.objectUrl);
+        if (res.objectUrl && res.objectUrl.startsWith("blob:")) {
+          URL.revokeObjectURL(res.objectUrl);
+        }
         return;
       }
       if (res.objectUrl) {
@@ -129,11 +133,13 @@ export function DauWaveformPlayer({
       stopBrowserSpeech();
       stopSpeechInterval();
       if (activeUrlRef.current) {
-        URL.revokeObjectURL(activeUrlRef.current);
+        if (activeUrlRef.current.startsWith("blob:")) {
+          URL.revokeObjectURL(activeUrlRef.current);
+        }
         activeUrlRef.current = null;
       }
     };
-  }, [question.id, question.customAudioKey]);
+  }, [question.id, question.customAudioKey, question.audioUrl]);
 
   // Mount headless wavesurfer.js + RegionsPlugin whenever real audioUrl exists
   useEffect(() => {

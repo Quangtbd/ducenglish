@@ -181,20 +181,26 @@ export function ListeningExamPracticeStudio({
 
           <DauWaveformPlayer
             question={{
-              id: examSet.id,
+              id: currentQ?.id || examSet.id,
               testId: "exam",
               part: examSet.part,
-              order: 1,
+              order: currentQ?.questionNumber || 1,
               level: examSet.level,
               topic: "office",
               title: examSet.title,
-              transcript: examSet.audioScript,
-              transcriptVi: examSet.subtitle,
+              transcript: currentQ?.transcriptSegment || examSet.audioScript,
+              transcriptVi: currentQ?.explanationVi || examSet.subtitle,
               linkedSpeechTip: "Chú ý ngữ điệu và phát âm chuẩn bản xứ.",
               grammarNote: "Luyện tập kỹ năng nghe hiểu Part theo chuẩn đề thi TOEIC.",
-              choices: [currentQ?.options[0]?.text || "", currentQ?.options[1]?.text || "", currentQ?.options[2]?.text || "", currentQ?.options[3]?.text || ""],
+              choices: [
+                currentQ?.options[0]?.text || "",
+                currentQ?.options[1]?.text || "",
+                currentQ?.options[2]?.text || "",
+                currentQ?.options[3]?.text || "",
+              ],
               correctChoiceIndex: 0,
               keyVocab: [],
+              audioUrl: currentQ?.audioUrl || examSet.audioUrl,
             }}
             playbackRate={1.0}
             onChangePlaybackRate={() => {}}
@@ -239,6 +245,16 @@ export function ListeningExamPracticeStudio({
                   <Star className={cn("h-4 w-4", savedFavorites.has(currentQ.id) && "fill-amber-400 text-amber-400")} />
                 </button>
               </div>
+
+              {currentQ.imageUrl && (
+                <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950">
+                  <img
+                    src={currentQ.imageUrl}
+                    alt={`TOEIC Question ${currentQ.questionNumber}`}
+                    className="max-h-72 w-full object-contain"
+                  />
+                </div>
+              )}
 
               <div className="mt-4 space-y-2.5">
                 {currentQ.options.map((opt) => {

@@ -36,6 +36,26 @@ export function createHowlAudio(
 export async function resolveQuestionAudio(
   question: ListeningQuestion
 ): Promise<ResolvedAudio> {
+  // 1. Direct audio file URL (authentic ETS 2026 MP3 or CDN)
+  if (question.audioUrl) {
+    try {
+      const baseUrl = (import.meta as any).env?.VITE_AUDIO_BASE_URL || "";
+      const fullUrl = question.audioUrl.startsWith("http")
+        ? question.audioUrl
+        : `${baseUrl}${question.audioUrl}`;
+
+      const res = await fetch(fullUrl, { method: "HEAD" });
+      if (res.ok) {
+        return {
+          objectUrl: fullUrl,
+          source: "cache",
+        };
+      }
+    } catch {
+      // Fallback if unreachable
+    }
+  }
+
   if (question.customAudioKey) {
     const customEntry = await db.audioCache.get(question.customAudioKey);
     if (customEntry) {

@@ -6,3 +6,11 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Large raw archives & PDF books (exceeds GitHub 100MB limit)
+*.zip
+*.pdf
+LISTENING*
+READING*
+TRANSCRIPT*
+

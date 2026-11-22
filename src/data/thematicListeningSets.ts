@@ -6,6 +6,7 @@ import type {
   TopicId,
   VocabHighlight,
 } from "../types/toeic";
+import { ETS_2026_THEMATIC_SETS } from "./ets2026/ets2026ThematicSets";
 
 interface SeedTopicConfig {
   id: string;
@@ -73,6 +74,11 @@ function buildSet(cfg: SeedTopicConfig): ThematicListeningSet {
 }
 
 export const THEMATIC_LISTENING_SETS: ThematicListeningSet[] = [
+  // =================================================================
+  // ===================== ETS 2026 THEMATIC SETS ====================
+  // =================================================================
+  ...ETS_2026_THEMATIC_SETS,
+
   // =================================================================
   // ========================= A1 (<300) =============================
   // =================================================================

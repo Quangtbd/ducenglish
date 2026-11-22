@@ -1,3 +1,5 @@
+import { ETS_2026_PART5_GRAMMAR_QUESTIONS } from "./ets2026/ets2026ReadingDataset";
+
 export interface GrammarQuestionItem {
   id: string;
   subtopicId: string;
@@ -32,6 +34,17 @@ export interface GrammarTopic {
 }
 
 export const GRAMMAR_TOPICS: GrammarTopic[] = [
+  {
+    id: "ets-2026-special",
+    title: "Chuyên đề ETS 2026 Trọng điểm",
+    category: "Từ loại",
+    totalCount: ETS_2026_PART5_GRAMMAR_QUESTIONS.length,
+    subtopics: [
+      { id: "mixed", title: "Tổng hợp Đề thi 2026", count: ETS_2026_PART5_GRAMMAR_QUESTIONS.length },
+      { id: "position", title: "Vị trí từ loại", count: 2 },
+    ],
+    questions: ETS_2026_PART5_GRAMMAR_QUESTIONS,
+  },
   {
     id: "noun",
     title: "Danh từ",

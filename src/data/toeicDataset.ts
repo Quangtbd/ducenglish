@@ -9,6 +9,7 @@ import type {
   VocabTopicPack,
   WritingPrompt,
 } from "../types/toeic";
+import { ETS_2026_READING_QUESTIONS } from "./ets2026/ets2026ReadingDataset";
 
 export const TOEIC_TEST_SETS: TestSet[] = [
   {
@@ -878,6 +879,7 @@ export const TOEIC_LISTENING_QUESTIONS: ListeningQuestion[] = [
 ];
 
 export const READING_QUESTIONS: ReadingQuestion[] = [
+  ...ETS_2026_READING_QUESTIONS,
   {
     id: "read-p5-1",
     part: 5,

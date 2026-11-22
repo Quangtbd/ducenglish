@@ -1,3 +1,10 @@
+import {
+  ETS_2026_PART1_SETS,
+  ETS_2026_PART2_SETS,
+  ETS_2026_PART3_SETS,
+  ETS_2026_PART4_SETS,
+} from "./ets2026/ets2026ListeningDataset";
+
 export interface ExamQuestionOption {
   label: "A" | "B" | "C" | "D";
   text: string;
@@ -11,6 +18,8 @@ export interface ExamQuestion {
   correctAnswer: "A" | "B" | "C" | "D";
   explanationVi: string;
   transcriptSegment?: string;
+  audioUrl?: string;
+  imageUrl?: string;
 }
 
 export interface ListeningExamSet {
@@ -24,10 +33,17 @@ export interface ListeningExamSet {
   totalQuestions: number;
   audioDurationSeconds: number;
   audioScript: string;
+  audioUrl?: string;
   questions: ExamQuestion[];
 }
 
 export const LISTENING_PART_EXAM_SETS: ListeningExamSet[] = [
+  // ========================== ETS 2026 OFFICIAL TOEIC SETS ==========================
+  ...ETS_2026_PART1_SETS,
+  ...ETS_2026_PART2_SETS,
+  ...ETS_2026_PART3_SETS,
+  ...ETS_2026_PART4_SETS,
+
   // ========================== PART 1 (4 sets across levels) ==========================
   {
     id: "p1-lvl1-set1",

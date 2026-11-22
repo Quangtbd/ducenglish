@@ -82,6 +82,7 @@ export interface ListeningQuestion {
   dialogue?: DialogueLine[];
   keyVocab: VocabHighlight[];
   customAudioKey?: string;
+  audioUrl?: string;
 }
 
 export interface TestSet {

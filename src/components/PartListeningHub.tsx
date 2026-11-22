@@ -42,6 +42,14 @@ export function PartListeningHub({
     return LISTENING_PART_EXAM_SETS.filter((s) => s.part === activeTab);
   }, [activeTab]);
 
+  const etsSets = useMemo(() => {
+    return currentPartSets.filter((s) => s.id.startsWith("ets2026-"));
+  }, [currentPartSets]);
+
+  const levelSets = useMemo(() => {
+    return currentPartSets.filter((s) => !s.id.startsWith("ets2026-"));
+  }, [currentPartSets]);
+
   if (activeExamSet) {
     return (
       <ListeningExamPracticeStudio
@@ -121,6 +129,74 @@ export function PartListeningHub({
             <span>Mẹo: Mẹo làm Part {activeTab} bẫy hay gặp ➔</span>
           </div>
 
+          {/* ETS 2026 Official Test Sets Showcase */}
+          {etsSets.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      MỚI NHẤT · ETS 2026
+                    </span>
+                    <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-50">
+                      Bộ đề ETS TOEIC 2026 Chuẩn Thi Thật
+                    </h2>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Kho âm thanh gốc 540 MP3 từ ETS kèm Transcript song ngữ & Phân tích bẫy đề thi
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {etsSets.map((set) => (
+                  <div
+                    key={set.id}
+                    className="group flex flex-col justify-between rounded-2xl border border-blue-200/80 bg-linear-to-b from-blue-50/40 to-white p-5 shadow-xs transition-all hover:-translate-y-1 hover:border-[#2463eb] hover:shadow-md dark:border-blue-900/50 dark:from-blue-950/20 dark:to-slate-900"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="rounded-md bg-[#2463eb] px-2 py-0.5 text-xs font-bold text-white">
+                          Part {set.part}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Audio ETS Gốc
+                        </span>
+                      </div>
+                      <h3 className="mt-2 font-display text-base font-bold text-slate-900 group-hover:text-[#2463eb] dark:text-slate-50">
+                        {set.title}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                        {set.subtitle}
+                      </p>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">
+                          {set.totalQuestions} câu hỏi
+                        </span>
+                        <span>•</span>
+                        <span>{set.category}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <span className="text-[11px] font-medium text-slate-400">
+                        Level {set.level} (Mục tiêu 600–900+)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveExamSet(set)}
+                        className="inline-flex cursor-pointer items-center justify-center rounded-full bg-[#2463eb] px-4 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-blue-700"
+                      >
+                        Luyện đề ngay
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Level 1 to 8 Cards Grid matching Screenshots 1-4 */}
           <div className="space-y-4">
             <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-50">
@@ -131,7 +207,7 @@ export function PartListeningHub({
               {Array.from({ length: 8 }, (_, idx) => {
                 const lvl = idx + 1;
                 const matchedSet =
-                  currentPartSets.find((s) => s.level === lvl) || currentPartSets[0];
+                  levelSets.find((s) => s.level === lvl) || levelSets[0] || currentPartSets[0];
 
                 return (
                   <div
